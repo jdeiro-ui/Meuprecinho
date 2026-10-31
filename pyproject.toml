@@ -1,0 +1,8 @@
+[project]
+name = "price-watch"
+version = "0.2.0"
+description = "Monitor pessoal de preços e de palavras-chave em grupos do Telegram"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

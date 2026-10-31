@@ -1,0 +1,14 @@
+<article class="card row {{ '' if r.active else 'muted' }}" id="r{{ r.id }}">
+  <a class="grow" href="/rules/{{ r.id }}">
+    <strong>{{ r.keyword }}</strong>
+    <small>
+      {{ r.groups|map(attribute='title')|join(', ') if r.groups else 'todos os grupos' }}
+      {% if r.exclusions %} · sem: {{ r.exclusions }}{% endif %}
+    </small>
+  </a>
+  <button class="switch {{ 'on' if r.active }}" role="switch" aria-checked="{{ 'true' if r.active else 'false' }}"
+          hx-post="/rules/{{ r.id }}/toggle" hx-target="#r{{ r.id }}" hx-swap="outerHTML"
+          aria-label="Ativar regra"></button>
+  <button class="danger small" hx-post="/rules/{{ r.id }}/delete" hx-target="#r{{ r.id }}"
+          hx-swap="outerHTML" hx-confirm="Remover a regra?">✕</button>
+</article>

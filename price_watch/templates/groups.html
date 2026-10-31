@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block heading %}Grupos{% endblock %}
+{% block content %}
+{% if not tg.authorized %}
+<p class="flash err">Pareie sua conta do Telegram na aba <a href="/telegram">Conta</a> primeiro.</p>
+{% else %}
+<form method="post" action="/groups/refresh" class="inline"><button class="secondary">Atualizar lista do Telegram</button></form>
+{% endif %}
+<p class="hint">Só os grupos com a chave ligada são lidos.</p>
+{% for g in groups %}{% include "_group_row.html" %}{% else %}
+<p class="empty">Nenhum grupo carregado.</p>
+{% endfor %}
+{% endblock %}

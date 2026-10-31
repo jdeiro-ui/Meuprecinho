@@ -1,0 +1,18 @@
+# Segredos e estado local
+.env
+*.session
+*.session-journal
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/

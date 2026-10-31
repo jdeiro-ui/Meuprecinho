@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block heading %}Avisos recentes{% endblock %}
+{% block content %}
+{% if not bot_ok %}
+<p class="flash err">BOT_TOKEN/CHAT_ID não configurados: os avisos ficam só aqui.</p>
+{% endif %}
+<form method="post" action="/alerts/test" class="inline"><button class="secondary">Enviar teste ao bot</button></form>
+{% for a in alerts %}
+<article class="card alert">
+  <header>
+    <strong>{{ a.group_title }}</strong>
+    <time>{{ a.created_at.astimezone().strftime('%d/%m %H:%M') }}</time>
+  </header>
+  <p class="kw">{{ a.keywords }}{% if not a.delivered %} · <span class="bad">não entregue</span>{% endif %}</p>
+  <p class="snippet">{{ a.snippet }}</p>
+  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener">Abrir no Telegram</a>{% endif %}
+</article>
+{% else %}
+<p class="empty">Nenhum aviso ainda.</p>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block heading %}Conta do Telegram{% endblock %}
+{% block content %}
+{% if not configured %}
+<p class="flash err">Defina API_ID e API_HASH no .env e reinicie o app.</p>
+{% elif tg.authorized %}
+<section class="card">
+  <p>Pareado como <strong>{{ tg.me_name }}</strong> ·
+     {{ 'conectado' if tg.connected else 'reconectando…' }}</p>
+  <form method="post" action="/telegram/logout" onsubmit="return confirm('Desconectar a conta? A sessão será apagada.')">
+    <button class="danger">Desparear</button>
+  </form>
+</section>
+{% elif tg.awaiting == 'code' %}
+<section class="card">
+  <p>Digite o código enviado pelo Telegram (no app ou por SMS).</p>
+  <form method="post" action="/telegram/code">
+    <label>Código <input name="code" inputmode="numeric" autocomplete="one-time-code" required autofocus></label>
+    <button>Confirmar</button>
+  </form>
+</section>
+{% elif tg.awaiting == 'password' %}
+<section class="card">
+  <p>Sua conta tem verificação em duas etapas.</p>
+  <form method="post" action="/telegram/password">
+    <label>Senha 2FA <input name="password" type="password" autocomplete="off" required autofocus></label>
+    <button>Entrar</button>
+  </form>
+</section>
+{% else %}
+<section class="card">
+  <p>Pareie a sua conta para ler os grupos. A sessão fica salva no servidor.</p>
+  <form method="post" action="/telegram/phone">
+    <label>Telefone <input name="phone" type="tel" placeholder="+55 11 99999-9999" autocomplete="tel" required></label>
+    <button>Enviar código</button>
+  </form>
+</section>
+{% endif %}
+<form method="post" action="/logout" class="inline"><button class="secondary">Sair do painel</button></form>
+{% endblock %}

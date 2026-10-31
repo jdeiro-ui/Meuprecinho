@@ -1,0 +1,9 @@
+<article class="card row" id="g{{ g.id }}">
+  <div class="grow">
+    <strong>{{ g.title }}</strong>
+    <small>{{ {'group': 'grupo', 'supergroup': 'supergrupo', 'channel': 'canal'}[g.kind] }}{% if g.username %} · @{{ g.username }}{% endif %}</small>
+  </div>
+  <button class="switch {{ 'on' if g.monitored }}" role="switch" aria-checked="{{ 'true' if g.monitored else 'false' }}"
+          hx-post="/groups/{{ g.id }}/toggle" hx-target="#g{{ g.id }}" hx-swap="outerHTML"
+          aria-label="Monitorar {{ g.title }}"></button>
+</article>

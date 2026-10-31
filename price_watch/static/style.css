@@ -1,0 +1,88 @@
+:root {
+  --bg: #f4f7f7; --card: #fff; --text: #13201f; --muted: #5d6d6c; --line: #dbe4e3;
+  --accent: #0f766e; --accent-text: #fff; --danger: #b42318; --ok-bg: #e6f4f1; --err-bg: #fdecea;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1416; --card: #142123; --text: #e6eeee; --muted: #93a6a5; --line: #233537;
+    --accent: #2bb3a3; --accent-text: #04201d; --danger: #f97066; --ok-bg: #12332f; --err-bg: #3a1714;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+main { max-width: 640px; margin: 0 auto; padding: 12px 16px; }
+a { color: var(--accent); }
+.top {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top));
+  background: var(--card); border-bottom: 1px solid var(--line);
+}
+.top h1 { font-size: 1.15rem; margin: 0; }
+.tg-status { font-size: .75rem; padding: 4px 10px; border-radius: 99px; text-decoration: none; }
+.tg-status.on { background: var(--ok-bg); color: var(--accent); }
+.tg-status.off { background: var(--err-bg); color: var(--danger); }
+.tabs {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; display: flex;
+  background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+}
+.tabs a {
+  flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px 0 10px;
+  text-decoration: none; color: var(--muted); font-size: 1.15rem; min-height: 56px;
+}
+.tabs a span { font-size: .7rem; margin-top: 2px; }
+.tabs a.active { color: var(--accent); font-weight: 600; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; margin: 10px 0;
+}
+.card.row { display: flex; align-items: center; gap: 10px; }
+.card.muted { opacity: .55; }
+.grow { flex: 1; min-width: 0; text-decoration: none; color: inherit; }
+.grow strong, .grow small { display: block; overflow: hidden; text-overflow: ellipsis; }
+small, .hint, time, .kw { color: var(--muted); font-size: .85rem; }
+.hint { margin: 4px 0 8px; }
+.empty { color: var(--muted); text-align: center; padding: 24px 0; }
+summary { font-weight: 600; cursor: pointer; padding: 4px 0; }
+form label { display: block; margin: 10px 0; font-size: .9rem; color: var(--muted); }
+input, select {
+  display: block; width: 100%; margin-top: 4px; padding: 12px; font: inherit; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+}
+label.check { display: flex; align-items: center; gap: 10px; color: var(--text); }
+label.check input { width: 22px; height: 22px; margin: 0; flex: none; }
+fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 10px 0; padding: 4px 12px; }
+legend { font-size: .85rem; color: var(--muted); padding: 0 4px; }
+button, .button {
+  display: inline-block; padding: 12px 18px; font: inherit; font-weight: 600; border: 0; border-radius: 10px;
+  background: var(--accent); color: var(--accent-text); text-decoration: none; cursor: pointer; min-height: 44px;
+}
+button.secondary, .button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+button.danger { background: transparent; color: var(--danger); border: 1px solid var(--line); }
+.small { padding: 8px 12px; min-height: 40px; }
+form.inline { margin: 8px 0; }
+.flash { padding: 10px 12px; border-radius: 10px; background: var(--ok-bg); }
+.flash.err { background: var(--err-bg); color: var(--danger); }
+.alert header { display: flex; justify-content: space-between; gap: 8px; }
+.alert .kw { margin: 2px 0 6px; }
+.alert .snippet { margin: 0 0 8px; white-space: pre-wrap; word-break: break-word; }
+.bad { color: var(--danger); }
+.login { margin-top: 15vh; }
+.login h1 { margin-top: 0; }
+.login button { width: 100%; margin-top: 8px; }
+.switch {
+  position: relative; flex: none; width: 52px; height: 32px; min-height: 0; padding: 0; border-radius: 99px;
+  background: var(--line);
+}
+.switch::after {
+  content: ""; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; transition: transform .15s;
+}
+.switch.on { background: var(--accent); }
+.switch.on::after { transform: translateX(20px); }
+.htmx-request.switch { opacity: .6; }
