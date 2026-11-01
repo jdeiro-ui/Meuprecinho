@@ -40,6 +40,21 @@ def format_alert(group_title: str, keywords: list[str], text: str, link: str | N
     return "\n".join(parts)
 
 
+def format_price_alert(store: str, name: str, old: int | None, new: int, target: int | None,
+                       reason: str, url: str) -> str:
+    from .pricing import format_brl
+
+    e = html.escape
+    price = f"<b>{format_brl(new)}</b>"
+    if old and old != new:
+        price = f"<s>{format_brl(old)}</s> → {price}"
+    parts = [f"💰 <b>{e(name)}</b>", f"{e(store)} · {e(reason)}", "", price]
+    if target:
+        parts.append(f"Seu alvo: {format_brl(target)}")
+    parts += ["", f'<a href="{e(url, quote=True)}">Ver na loja</a>']
+    return "\n".join(parts)
+
+
 async def send(text_html: str, retries: int = 3) -> bool:
     global last_error
     s = get_settings()

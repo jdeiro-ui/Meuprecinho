@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block heading %}Avisos{% endblock %}
-{% block subtitle %}<p class="sub">Mensagens que bateram com as suas regras</p>{% endblock %}
+{% block subtitle %}<p class="sub">Promoções do Telegram e quedas de preço</p>{% endblock %}
 {% block content %}
 {% if not bot_ok %}
 <div class="toast err">{{ icon('alert', 20) }}<span>BOT_TOKEN/CHAT_ID não configurados: os avisos ficam só aqui.</span></div>
@@ -9,19 +9,20 @@
   <button class="btn soft">{{ icon('send', 18) }} Enviar teste ao bot</button>
 </form>
 {% for a in alerts %}
-<article class="card alert-card">
+<article class="card alert-card {{ a.source }}">
   <header>
     <strong class="title">{{ a.group_title }}</strong>
-    <time>{{ a.created_at.astimezone().strftime('%d/%m %H:%M') }}</time>
+    <time>{{ a.created_at|local }}</time>
   </header>
   <div class="chips">
-    {% for k in a.keywords.split(', ') %}<span class="chip hot">{{ k }}</span>{% endfor %}
+    {% if a.source == 'price' %}<span class="chip ok">{{ icon('trending-down', 14) }} {{ a.keywords }}</span>
+    {% else %}{% for k in a.keywords.split(', ') %}<span class="chip hot">{{ k }}</span>{% endfor %}{% endif %}
     {% if not a.delivered %}<span class="chip bad">não entregue</span>{% endif %}
   </div>
   <p class="snippet">{{ a.snippet }}</p>
-  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener" class="btn soft small">{{ icon('external', 16) }} Abrir no Telegram</a>{% endif %}
+  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener" class="btn soft small">{{ icon('external', 16) }} {{ 'Ver na loja' if a.source == 'price' else 'Abrir no Telegram' }}</a>{% endif %}
 </article>
 {% else %}
-<div class="empty">{{ icon('bell', 40) }}<p>Nenhum aviso ainda.</p><small>Quando uma mensagem bater com uma regra, ela aparece aqui e no seu bot.</small></div>
+<div class="empty">{{ icon('bell', 40) }}<p>Nenhum aviso ainda.</p><small>Promoções do Telegram e quedas de preço aparecem aqui e no seu bot.</small></div>
 {% endfor %}
 {% endblock %}

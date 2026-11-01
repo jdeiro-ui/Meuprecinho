@@ -1,11 +1,29 @@
 {% extends "base.html" %}
 {% block heading %}Lojas{% endblock %}
-{% block subtitle %}<p class="sub">Onde os preços serão acompanhados</p>{% endblock %}
+{% block subtitle %}<p class="sub"><a href="/products" class="back-link">{{ icon('chevron-left', 16) }} Produtos</a> · onde os preços são lidos</p>{% endblock %}
 {% block content %}
-<details class="card form-card" {{ 'open' if edit or not stores }}>
-  <summary>{{ icon('edit' if edit else 'plus', 20) }} {{ 'Editar loja' if edit else 'Nova loja' }}</summary>
+{% if suggestions %}
+<section class="card">
+  <h2>Lojas sugeridas</h2>
+  <p class="hint">Toque para adicionar. Lojas também são criadas sozinhas quando você cadastra um produto.</p>
+  <div class="suggest">
+    {% for c in suggestions %}
+    <form method="post" action="/stores/suggested">
+      <input type="hidden" name="domain" value="{{ c.domain }}">
+      <button class="suggest-btn" title="{{ c.domain }}{{ ' · ' ~ c.note if c.note }}">
+        {{ icon('plus', 16) }}<span>{{ c.name }}</span>{% if c.note %}<i class="warn-dot" aria-label="{{ c.note }}"></i>{% endif %}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+  <p class="hint legend"><i class="warn-dot"></i> costuma bloquear leitura automática</p>
+</section>
+{% endif %}
+
+<details class="card form-card" {{ 'open' if edit }}>
+  <summary>{{ icon('edit' if edit else 'plus', 20) }} {{ 'Editar loja' if edit else 'Outra loja' }}</summary>
   <form method="post" action="/stores{{ '/%d' % edit.id if edit }}">
-    <label>Nome <input name="name" value="{{ edit.name if edit }}" placeholder="Kabum" required></label>
+    <label>Nome <input name="name" value="{{ edit.name if edit }}" placeholder="Minha loja" required></label>
     <label>Domínio <input name="domain" value="{{ edit.domain if edit }}" placeholder="loja.com.br"
            autocapitalize="none" inputmode="url" required></label>
     <div class="grid2">
@@ -14,28 +32,36 @@
       <label>Leitura
         <select name="read_mode">
           {% for k, v in modes.items() %}
-          <option value="{{ k }}" {{ 'selected' if edit and edit.read_mode == k }}>{{ 'Navegador' if k == 'browser' else 'HTTP' }}</option>
+          <option value="{{ k }}" {{ 'selected' if edit and edit.read_mode == k }}>{{ v }}</option>
           {% endfor %}
         </select>
       </label>
     </div>
     <p class="hint">HTTP é mais leve. Use "Navegador" para sites que só mostram o preço com JavaScript.</p>
+    <label>Seletor CSS do preço (avançado, opcional)
+      <input name="price_selector" value="{{ edit.price_selector or '' if edit }}" placeholder=".preco-final" autocapitalize="none"></label>
+    <p class="hint">Só preencha se o app não encontrar o preço sozinho nessa loja.</p>
     <div class="row-actions">
       <button class="btn primary">Salvar</button>
       {% if edit %}<a href="/stores" class="btn ghost">Cancelar</a>{% endif %}
     </div>
   </form>
 </details>
+
 {% for s in stores %}
 <article class="card item">
   <span class="avatar">{{ s.name[:1]|upper }}</span>
   <div class="grow">
     <strong>{{ s.name }}</strong>
     <small>{{ s.domain }}</small>
-    <div class="chips"><span class="chip">a cada {{ s.interval_minutes }} min</span><span class="chip">{{ 'Navegador' if s.read_mode == 'browser' else 'HTTP' }}</span></div>
+    <div class="chips">
+      <span class="chip">a cada {{ s.interval_minutes }} min</span>
+      <span class="chip">{{ modes[s.read_mode] }}</span>
+      <span class="chip">{{ s.products|length }} produto{{ 's' if s.products|length != 1 }}</span>
+    </div>
   </div>
   <a href="/stores/{{ s.id }}" class="icon-btn" aria-label="Editar {{ s.name }}">{{ icon('edit', 18) }}</a>
-  <form method="post" action="/stores/{{ s.id }}/delete" onsubmit="return confirm('Remover {{ s.name|e }}?')">
+  <form method="post" action="/stores/{{ s.id }}/delete" onsubmit="return confirm('Remover {{ s.name|e }} e os produtos dela?')">
     <button class="icon-btn danger" aria-label="Remover {{ s.name }}">{{ icon('x', 18) }}</button>
   </form>
 </article>

@@ -32,7 +32,18 @@ def get_db() -> Iterator[Session]:
         yield db
 
 
+# Colunas acrescentadas depois da primeira versão (create_all não altera tabelas)
+_NEW_COLUMNS = [
+    ("stores", "price_selector", "VARCHAR(255)"),
+]
+
+
 def init_db() -> None:
     from . import models  # noqa: F401  (registra as tabelas)
 
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        for table, column, ddl in _NEW_COLUMNS:
+            cols = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+            if column not in cols:
+                conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")

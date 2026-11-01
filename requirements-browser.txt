@@ -1,0 +1,2 @@
+# Opcional: modo Navegador (sites que só mostram o preço com JavaScript)
+playwright>=1.45

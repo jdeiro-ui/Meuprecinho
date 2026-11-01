@@ -1,0 +1,26 @@
+{% from "_icons.html" import icon %}
+<article class="card product {{ '' if p.active else 'muted' }}" id="p{{ p.id }}">
+  <a class="product-main" href="/products/{{ p.id }}">
+    {% if p.image_url %}<img src="{{ p.image_url }}" alt="" class="thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.classList.add('broken')">
+    {% else %}<span class="thumb empty-thumb">{{ icon('tag', 26) }}</span>{% endif %}
+    <div class="grow">
+      <strong class="pname">{{ p.name or ('Consultando…' if not p.last_checked_at else 'Produto sem nome') }}</strong>
+      <div class="price-row">
+        <span class="price">{{ p.current_cents|brl }}</span>
+        {% if p.lowest_cents and p.current_cents and p.lowest_cents < p.current_cents %}<small>mín. {{ p.lowest_cents|brl }}</small>{% endif %}
+      </div>
+      <div class="chips">
+        <span class="chip">{{ p.store.name }}</span>
+        {% if p.target_cents %}<span class="chip {{ 'ok' if p.current_cents and p.current_cents <= p.target_cents }}">alvo {{ p.target_cents|brl }}</span>{% endif %}
+        {% if p.available == false %}<span class="chip bad">indisponível</span>{% endif %}
+        {% if p.last_error %}<span class="chip bad" title="{{ p.last_error }}">erro na leitura</span>{% endif %}
+        {% if not p.active %}<span class="chip">pausado</span>{% endif %}
+      </div>
+    </div>
+  </a>
+  <footer class="product-foot">
+    <small>{{ 'Consultado ' ~ (p.last_checked_at|ago) if p.last_checked_at else 'Aguardando a primeira consulta' }}</small>
+    <button class="btn soft small" hx-post="/products/{{ p.id }}/check" hx-target="#p{{ p.id }}" hx-swap="outerHTML"
+            hx-indicator="#p{{ p.id }}">{{ icon('refresh', 16) }} Consultar</button>
+  </footer>
+</article>

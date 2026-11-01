@@ -1,0 +1,245 @@
+"""Leitura de preços: funções puras (sem rede nem banco), fáceis de testar.
+
+Preços circulam em centavos (int) para evitar erros de arredondamento."""
+
+import json
+import re
+from dataclasses import dataclass
+from urllib.parse import urlsplit
+
+from bs4 import BeautifulSoup
+
+
+@dataclass
+class Extracted:
+    price: int | None = None  # centavos
+    name: str | None = None
+    image: str | None = None
+    available: bool | None = None
+
+
+# ---------- números ----------
+
+_NUM = re.compile(r"\d[\d.,]*")
+
+
+def parse_brl(value) -> int | None:
+    """'R$ 1.299,90' / '1299.90' / 1299.9 -> 129990 centavos."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        cents = round(float(value) * 100)
+        return cents if cents > 0 else None
+    m = _NUM.search(str(value).replace("\xa0", " "))
+    if not m:
+        return None
+    s = m.group().rstrip(".,")
+    if "." in s and "," in s:
+        dec = "," if s.rfind(",") > s.rfind(".") else "."
+        s = s.replace("." if dec == "," else ",", "").replace(dec, ".")
+    elif "," in s:
+        whole, _, frac = s.rpartition(",")
+        s = f"{whole.replace(',', '')}.{frac}" if len(frac) <= 2 else s.replace(",", "")
+    elif "." in s:
+        whole, _, frac = s.rpartition(".")
+        # "1.299" e "12.990" são milhares no Brasil; "1299.9" é decimal
+        if len(frac) == 3 or s.count(".") > 1:
+            s = s.replace(".", "")
+    try:
+        cents = round(float(s) * 100)
+    except ValueError:
+        return None
+    return cents if cents > 0 else None
+
+
+def format_brl(cents: int | None) -> str:
+    if cents is None:
+        return "—"
+    reais, cent = divmod(int(cents), 100)
+    return f"R$ {reais:,}".replace(",", ".") + f",{cent:02d}"
+
+
+# ---------- extração da página ----------
+
+def _walk(node):
+    if isinstance(node, dict):
+        yield node
+        for v in node.values():
+            yield from _walk(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _walk(v)
+
+
+def _is_product(d: dict) -> bool:
+    t = d.get("@type")
+    types = t if isinstance(t, list) else [t]
+    return any(str(x).lower() in ("product", "productgroup") for x in types)
+
+
+def _offer_prices(offers) -> tuple[list[int], bool | None]:
+    prices: list[int] = []
+    available = None
+    for o in _walk(offers):
+        for key in ("price", "lowPrice"):
+            p = parse_brl(o.get(key))
+            if p:
+                prices.append(p)
+        av = str(o.get("availability", "")).lower()
+        if av:
+            in_stock = "instock" in av or "limitedavailability" in av or "presale" in av
+            available = in_stock or bool(available)
+    return prices, available
+
+
+def _first_image(img) -> str | None:
+    if isinstance(img, str):
+        return img
+    if isinstance(img, list) and img:
+        return _first_image(img[0])
+    if isinstance(img, dict):
+        return img.get("url") or img.get("contentUrl")
+    return None
+
+
+def _from_jsonld(soup: BeautifulSoup) -> Extracted:
+    out = Extracted()
+    for tag in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(tag.string or tag.get_text() or "")
+        except (ValueError, TypeError):
+            continue
+        for d in _walk(data):
+            if not _is_product(d) or "offers" not in d:
+                continue
+            prices, available = _offer_prices(d["offers"])
+            if prices:
+                out.price = min(prices)
+                out.name = out.name or d.get("name")
+                out.image = out.image or _first_image(d.get("image"))
+                out.available = available
+                return out
+    return out
+
+
+_META_PRICE = ("product:price:amount", "og:price:amount", "price", "twitter:data1")
+
+
+def _from_meta(soup: BeautifulSoup) -> int | None:
+    for key in _META_PRICE:
+        for attr in ("property", "itemprop", "name"):
+            tag = soup.find("meta", attrs={attr: key})
+            if tag and (p := parse_brl(tag.get("content"))):
+                return p
+    tag = soup.find(attrs={"itemprop": "price"})
+    if tag:
+        return parse_brl(tag.get("content") or tag.get_text(" ", strip=True))
+    return None
+
+
+# Seletores específicos para lojas sem dados estruturados confiáveis
+SITE_SELECTORS = {
+    "amazon.com.br": [
+        "#corePriceDisplay_desktop_feature_div .a-price .a-offscreen",
+        "#corePrice_feature_div .a-price .a-offscreen",
+        "#apex_desktop .a-price .a-offscreen",
+        "#priceblock_dealprice",
+        "#priceblock_ourprice",
+        "#twister-plus-price-data-price",
+    ],
+    "mercadolivre.com.br": [".ui-pdp-price__second-line [itemprop=price]",
+                            ".ui-pdp-price__second-line .andes-money-amount__fraction"],
+}
+
+
+def _by_selector(soup: BeautifulSoup, selector: str) -> int | None:
+    try:
+        tag = soup.select_one(selector)
+    except Exception:  # noqa: BLE001 — seletor inválido digitado pelo usuário
+        return None
+    if tag is None:
+        return None
+    return parse_brl(tag.get("content") or tag.get("value") or tag.get_text(" ", strip=True))
+
+
+def host_of(url: str) -> str:
+    return (urlsplit(url).hostname or "").lower().removeprefix("www.")
+
+
+def _site_rules(host: str) -> list[str]:
+    for domain, sels in SITE_SELECTORS.items():
+        if host == domain or host.endswith("." + domain):
+            return sels
+    return []
+
+
+def extract(html: str, url: str, selector: str | None = None) -> Extracted:
+    """Preço, nome e imagem do produto. Ordem: seletor da loja (definido pelo
+    usuário) > JSON-LD (schema.org) > metatags > seletores conhecidos."""
+    soup = BeautifulSoup(html, "html.parser")
+    out = _from_jsonld(soup)
+    if selector and (p := _by_selector(soup, selector)):
+        out.price = p
+    if out.price is None:
+        out.price = _from_meta(soup)
+    if out.price is None:
+        for sel in _site_rules(host_of(url)):
+            if p := _by_selector(soup, sel):
+                out.price = p
+                break
+    if not out.name:
+        og = soup.find("meta", property="og:title")
+        h1 = soup.find("h1")
+        title = soup.find("title")
+        out.name = (og and og.get("content")) or (h1 and h1.get_text(" ", strip=True)) \
+            or (title and title.get_text(" ", strip=True)) or None
+    if not out.image:
+        og = soup.find("meta", property="og:image")
+        out.image = og.get("content") if og else None
+    if out.name:
+        out.name = " ".join(str(out.name).split())
+        # "Produto X | Nome da Loja" -> "Produto X"
+        head, sep, tail = out.name.rpartition(" | ")
+        if sep and head and len(tail) <= 40:
+            out.name = head
+        out.name = out.name[:300]
+    return out
+
+
+# ---------- decisão de aviso ----------
+
+def should_notify(new: int | None, available: bool | None, target: int | None,
+                  lowest_before: int | None, last_notified: int | None) -> str | None:
+    """Motivo do aviso, ou None. Com alvo: avisa ao ficar abaixo dele e de novo
+    se cair ainda mais. Sem alvo: avisa quando bate o menor preço já visto."""
+    if new is None or available is False:
+        return None
+    if target is not None:
+        if new <= target and (last_notified is None or new < last_notified):
+            return "abaixo do seu preço-alvo"
+        return None
+    if lowest_before is not None and new < lowest_before:
+        return "menor preço já visto"
+    return None
+
+
+# ---------- utilidades ----------
+
+_URL = re.compile(r"https?://[^\s<>\"']+")
+
+
+def find_url(text: str | None) -> str | None:
+    """Primeiro link de um texto (apps de loja compartilham 'Olha isso! https://...')."""
+    m = _URL.search(text or "")
+    return m.group().rstrip(").,;!") if m else None
+
+
+def match_store(host: str, domains: list[str]) -> str | None:
+    """Domínio cadastrado que cobre o host (ex.: produto.mercadolivre.com.br)."""
+    host = host.lower().removeprefix("www.")
+    best = None
+    for d in domains:
+        if host == d or host.endswith("." + d):
+            if best is None or len(d) > len(best):
+                best = d
+    return best

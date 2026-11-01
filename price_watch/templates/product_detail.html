@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block heading %}{{ p.name or 'Produto' }}{% endblock %}
+{% block subtitle %}<p class="sub"><a href="/products" class="back-link">{{ icon('chevron-left', 16) }} Produtos</a> · {{ p.store.name }}</p>{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="detail-head">
+    {% if p.image_url %}<img src="{{ p.image_url }}" alt="" class="thumb big" referrerpolicy="no-referrer" onerror="this.classList.add('broken')">{% endif %}
+    <div class="grow">
+      <span class="price big">{{ p.current_cents|brl }}</span>
+      <div class="chips">
+        <span class="chip">mín. {{ p.lowest_cents|brl }}</span>
+        {% if p.target_cents %}<span class="chip {{ 'ok' if p.current_cents and p.current_cents <= p.target_cents }}">alvo {{ p.target_cents|brl }}</span>{% endif %}
+        {% if p.available == false %}<span class="chip bad">indisponível</span>{% endif %}
+      </div>
+      <small>Consultado {{ p.last_checked_at|ago }}</small>
+    </div>
+  </div>
+  {% if p.last_error %}<div class="toast err">{{ icon('alert', 20) }}<span>Última leitura falhou: {{ p.last_error }}.</span></div>{% endif %}
+  {% if chart %}
+  <svg class="chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" preserveAspectRatio="none" role="img" aria-label="Histórico de preço">
+    <defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="var(--brand)" stop-opacity=".28"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/>
+    </linearGradient></defs>
+    <polygon points="{{ chart.area }}" fill="url(#fill)"/>
+    <polyline points="{{ chart.line }}" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+  </svg>
+  <div class="chart-scale"><small>{{ chart.lo|brl }}</small><small>{{ chart.hi|brl }}</small></div>
+  {% endif %}
+  <div class="row-actions">
+    <a href="{{ p.url }}" target="_blank" rel="noopener" class="btn primary">{{ icon('external', 18) }} Ver na loja</a>
+    <form method="post" action="/products/{{ p.id }}/check"><button class="btn soft">{{ icon('refresh', 18) }} Consultar</button></form>
+  </div>
+</section>
+
+<details class="card form-card">
+  <summary>{{ icon('edit', 20) }} Editar</summary>
+  <form method="post" action="/products/{{ p.id }}">
+    <label>Nome <input name="name" value="{{ p.name or '' }}"></label>
+    <label>Preço-alvo (vazio = avisar no menor preço já visto)
+      <input name="target" inputmode="decimal" value="{{ (p.target_cents|brl) if p.target_cents else '' }}" placeholder="R$ 1.999,90"></label>
+    <label class="check"><input type="checkbox" name="active" {{ 'checked' if p.active }}> Acompanhar este produto</label>
+    <div class="row-actions"><button class="btn primary">Salvar</button></div>
+  </form>
+</details>
+
+{% if points %}
+<section class="card">
+  <h2>Histórico</h2>
+  <ul class="history">
+    {% for pt in points %}<li><span>{{ pt.checked_at|local }}</span><strong>{{ pt.cents|brl }}</strong></li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<form method="post" action="/products/{{ p.id }}/delete" class="actions" onsubmit="return confirm('Remover este produto?')">
+  <button class="btn ghost danger-text">Remover produto</button>
+</form>
+{% endblock %}

@@ -4,7 +4,7 @@
 
 Web app pessoal (PWA, mobile-first) que:
 
-1. guarda as **lojas** que você quer monitorar (a coleta de preços chega nas próximas fases);
+1. acompanha o **preço de produtos** nas lojas que você escolher e avisa quando cai;
 2. lê **grupos/canais do Telegram** dos quais você é membro (só os marcados no app) e avisa,
    por um bot, quando uma mensagem contém suas **palavras-chave**.
 
@@ -44,6 +44,27 @@ Depois abra o endereço no Chrome → menu ⋮ → *Instalar app*.
 Cada mensagem gera no máximo um aviso (tabela `seen_messages`), com nome do grupo,
 trecho e link (grupos básicos, que não são supergrupos, não têm link de mensagem).
 
+## Preços (fase 3)
+
+- **Produtos**: cole o link do produto ou, com o app instalado, use *Compartilhar → MeuPrecinho*
+  no app da loja. Preço-alvo é opcional: com alvo, avisa ao ficar abaixo dele (e de novo se cair
+  mais); sem alvo, avisa quando bate o menor preço já visto. Produto indisponível não gera aviso.
+- **Lojas**: sugestões das principais lojas brasileiras; uma loja também é criada sozinha ao
+  cadastrar um produto. Cada loja define o intervalo entre consultas e o modo de leitura.
+- **Como o preço é lido**: seletor CSS da loja (se você definir) → dados estruturados
+  schema.org (JSON-LD) → metatags → seletores conhecidos (Amazon, Mercado Livre).
+- **Bloqueios**: várias lojas barram robôs vindos de servidores na nuvem (captcha ou HTTP 403).
+  O produto mostra "erro na leitura" com o motivo. Nos testes funcionaram Americanas e KaBuM.
+- **Modo Navegador (opcional)**: para sites que só mostram o preço com JavaScript. Pesa na VM
+  pequena; antes, crie um swap de 2 GB:
+  ```bash
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  .venv/bin/pip install -r requirements-browser.txt
+  sudo .venv/bin/playwright install-deps chromium && .venv/bin/playwright install chromium
+  ```
+- Datas exibidas no fuso `TIMEZONE` (padrão `America/Sao_Paulo`).
+
 ## Testar
 
 ```bash
@@ -55,6 +76,11 @@ pytest -q
 - `tests/test_seen.py`: não repetir aviso.
 - `tests/test_listener.py`: listener com evento falso; ignora grupo não marcado,
   aplica a regra e envia uma vez só.
+- `tests/test_pricing.py`: leitura de preço (formatos em reais, JSON-LD, metatags, Amazon,
+  seletor próprio) e a decisão de avisar.
+- `tests/test_monitor.py`: consulta de ponta a ponta com loja falsa (histórico, aviso único,
+  erros de leitura).
+- `tests/test_login.py`: bloqueio após senhas erradas.
 
 Teste manual ponta a ponta: pareie a conta, marque um grupo seu, crie uma regra
 (ex.: `teste123`) e mande essa palavra no grupo a partir de outra conta. O aviso chega
@@ -65,4 +91,4 @@ pelo bot e aparece em **Avisos**.
 - Logs não incluem texto de mensagens, telefone, nomes nem a URL do bot (que contém o token).
 - Senha com hash scrypt; cookie de sessão assinado, `SameSite=Lax`.
 - Telethon com `auto_reconnect` + watchdog no APScheduler que reconecta a cada 60 s.
-- Limpeza diária: `seen_messages` > 60 dias e avisos > 90 dias.
+- Limpeza diária: `seen_messages` > 60 dias, avisos > 90 dias, histórico de preços > 1 ano.

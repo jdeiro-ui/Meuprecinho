@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block heading %}Produtos{% endblock %}
+{% block subtitle %}<p class="sub">Preços acompanhados nas suas lojas</p>{% endblock %}
+{% block content %}
+<details class="card form-card" id="novo" {{ 'open' if prefill or not products }}>
+  <summary>{{ icon('plus', 20) }} Adicionar produto</summary>
+  <form method="post" action="/products">
+    <label>Link do produto
+      <input name="url" value="{{ prefill }}" placeholder="https://www.loja.com.br/produto..." inputmode="url" autocapitalize="none" required></label>
+    <p class="hint">Dica: no app da loja, toque em <b>Compartilhar → MeuPrecinho</b>.</p>
+    <label>Preço-alvo (opcional)
+      <input name="target" inputmode="decimal" placeholder="R$ 1.999,90"></label>
+    <p class="hint">Com alvo, avisa quando ficar abaixo dele. Sem alvo, avisa quando bater o menor preço já visto.</p>
+    <button class="btn primary block">Adicionar e consultar</button>
+  </form>
+</details>
+<div class="actions split">
+  <a href="/stores" class="btn soft">{{ icon('store', 18) }} Lojas</a>
+</div>
+{% for p in products %}{% include "_product_card.html" %}{% else %}
+<div class="empty">{{ icon('tag', 40) }}<p>Nenhum produto ainda.</p><small>Cole o link de um produto acima para começar.</small></div>
+{% endfor %}
+{% endblock %}

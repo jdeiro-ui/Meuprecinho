@@ -3,23 +3,22 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
-from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import notifier, scheduler
 from .config import get_settings
-from .db import get_db, init_db
-from .models import Alert, Rule, Store, TgGroup, User
+from .db import init_db
+from .models import Alert, Rule, TgGroup, User
+from .routes_prices import router as prices_router
 from .security import verify_password
 from .telegram import PairingError, manager
+from .web import DB, Auth, LoginRequired, back, flash, render
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("telethon").setLevel(logging.WARNING)
@@ -28,9 +27,6 @@ logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
 BASE = Path(__file__).parent
 settings = get_settings()
-templates = Jinja2Templates(directory=BASE / "templates")
-
-READ_MODES = {"http": "HTTP (httpx + BeautifulSoup)", "browser": "Navegador (Playwright)"}
 
 
 @asynccontextmanager
@@ -54,45 +50,19 @@ app.add_middleware(
     https_only=settings.COOKIE_SECURE,
 )
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
-
-DB = Annotated[Session, Depends(get_db)]
+app.include_router(prices_router)
 
 
 # ---------- autenticação ----------
-
-class LoginRequired(Exception):
-    pass
-
 
 @app.exception_handler(LoginRequired)
 async def _to_login(request: Request, _: LoginRequired):
     if request.headers.get("HX-Request"):
         return Response(status_code=401, headers={"HX-Redirect": "/login"})
+    if request.method == "GET":  # volta para a página pedida depois do login (ex.: compartilhar)
+        q = request.url.query
+        request.session["next"] = request.url.path + (f"?{q}" if q else "")
     return RedirectResponse("/login", status_code=303)
-
-
-def require_user(request: Request) -> int:
-    uid = request.session.get("uid")
-    if not uid:
-        raise LoginRequired
-    return uid
-
-
-Auth = Depends(require_user)
-
-
-def render(request: Request, name: str, **ctx) -> HTMLResponse:
-    ctx.setdefault("flash", request.session.pop("flash", None))
-    ctx.setdefault("tg", manager)
-    return templates.TemplateResponse(request, name, ctx)
-
-
-def flash(request: Request, msg: str, kind: str = "ok") -> None:
-    request.session["flash"] = {"msg": msg, "kind": kind}
-
-
-def back(url: str) -> RedirectResponse:
-    return RedirectResponse(url, status_code=303)
 
 
 @app.get("/login")
@@ -123,9 +93,10 @@ async def login(request: Request, db: DB, username: str = Form(), password: str 
     user = db.scalar(select(User).where(User.username == username.strip()))
     if user and await asyncio.to_thread(verify_password, password, user.password_hash):
         _fails.pop(ip, None)
+        nxt = request.session.get("next") or "/"
         request.session.clear()
         request.session["uid"] = user.id
-        return back("/")
+        return back(nxt if nxt.startswith("/") and not nxt.startswith("//") else "/")
     _fails.setdefault(ip, []).append(time.monotonic())
     await asyncio.sleep(1.5)  # freia tentativas de força bruta
     return render(request, "login.html", error="Usuário ou senha inválidos")
@@ -183,69 +154,6 @@ async def alerts_test(request: Request):
         why = notifier.last_error or "veja BOT_TOKEN/CHAT_ID"
         flash(request, f"Falha ao enviar: {hint.get(why, why)}", "err")
     return back("/alerts")
-
-
-# ---------- lojas ----------
-
-def clean_domain(raw: str) -> str:
-    raw = raw.strip().lower()
-    host = urlsplit(raw if "//" in raw else f"//{raw}").hostname or ""
-    return host.removeprefix("www.")
-
-
-def _store_form(name: str, domain: str, interval_minutes: int, read_mode: str) -> dict | str:
-    domain = clean_domain(domain)
-    if not name.strip() or not domain or "." not in domain:
-        return "Informe nome e um domínio válido (ex.: loja.com.br)"
-    if read_mode not in READ_MODES:
-        return "Modo de leitura inválido"
-    return {"name": name.strip(), "domain": domain,
-            "interval_minutes": max(5, min(interval_minutes, 7 * 24 * 60)), "read_mode": read_mode}
-
-
-@app.get("/stores", dependencies=[Auth])
-def stores(request: Request, db: DB):
-    items = db.scalars(select(Store).order_by(Store.name)).all()
-    return render(request, "stores.html", stores=items, modes=READ_MODES, edit=None)
-
-
-@app.get("/stores/{store_id}", dependencies=[Auth])
-def store_edit(request: Request, db: DB, store_id: int):
-    items = db.scalars(select(Store).order_by(Store.name)).all()
-    return render(request, "stores.html", stores=items, modes=READ_MODES, edit=db.get(Store, store_id))
-
-
-@app.post("/stores", dependencies=[Auth])
-@app.post("/stores/{store_id}", dependencies=[Auth])
-def store_save(request: Request, db: DB, name: str = Form(), domain: str = Form(),
-               interval_minutes: int = Form(60), read_mode: str = Form("http"),
-               store_id: int | None = None):
-    data = _store_form(name, domain, interval_minutes, read_mode)
-    if isinstance(data, str):
-        flash(request, data, "err")
-        return back("/stores")
-    dup = db.scalar(select(Store).where(Store.domain == data["domain"]))
-    if dup and dup.id != store_id:
-        flash(request, "Já existe uma loja com esse domínio", "err")
-        return back("/stores")
-    store = db.get(Store, store_id) if store_id else Store()
-    if store is None:
-        return back("/stores")
-    for k, v in data.items():
-        setattr(store, k, v)
-    db.add(store)
-    db.commit()
-    flash(request, "Loja salva")
-    return back("/stores")
-
-
-@app.post("/stores/{store_id}/delete", dependencies=[Auth])
-def store_delete(request: Request, db: DB, store_id: int):
-    if store := db.get(Store, store_id):
-        db.delete(store)
-        db.commit()
-        flash(request, "Loja removida")
-    return back("/stores")
 
 
 # ---------- grupos ----------

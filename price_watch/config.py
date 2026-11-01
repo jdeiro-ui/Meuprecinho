@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     DATA_DIR: Path = Path("data")
     COOKIE_SECURE: bool = False
     SESSION_DAYS: int = 30
+    TIMEZONE: str = "America/Sao_Paulo"
 
     @property
     def db_url(self) -> str:
