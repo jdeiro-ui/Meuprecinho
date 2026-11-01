@@ -151,8 +151,14 @@ def alerts(request: Request, db: DB):
 @app.post("/alerts/test", dependencies=[Auth])
 async def alerts_test(request: Request):
     ok = await notifier.send("✅ price-watch: teste de aviso")
-    flash(request, "Mensagem de teste enviada" if ok else "Falha ao enviar (veja BOT_TOKEN/CHAT_ID)",
-          "ok" if ok else "err")
+    if ok:
+        flash(request, "Mensagem de teste enviada")
+    else:
+        hint = {"Unauthorized": "BOT_TOKEN inválido",
+                "Bad Request: chat not found": "CHAT_ID errado ou você não tocou em Iniciar no bot",
+                "Forbidden: bot was blocked by the user": "o bot está bloqueado; desbloqueie e toque em Iniciar"}
+        why = notifier.last_error or "veja BOT_TOKEN/CHAT_ID"
+        flash(request, f"Falha ao enviar: {hint.get(why, why)}", "err")
     return back("/alerts")
 
 

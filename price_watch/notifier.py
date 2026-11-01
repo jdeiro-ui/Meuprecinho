@@ -11,6 +11,8 @@ from .config import get_settings
 log = logging.getLogger(__name__)
 
 _client: httpx.AsyncClient | None = None
+# Motivo da última falha (ex.: "Unauthorized"), mostrado no teste do painel
+last_error: str | None = None
 
 
 def _http() -> httpx.AsyncClient:
@@ -39,6 +41,7 @@ def format_alert(group_title: str, keywords: list[str], text: str, link: str | N
 
 
 async def send(text_html: str, retries: int = 3) -> bool:
+    global last_error
     s = get_settings()
     if not s.bot_configured:
         log.warning("Bot não configurado (BOT_TOKEN/CHAT_ID); aviso não enviado")
@@ -58,12 +61,18 @@ async def send(text_html: str, retries: int = 3) -> bool:
                 await asyncio.sleep(min(int(wait), 60))
                 continue
             if r.is_success:
+                last_error = None
                 return True
-            # Só o status: a resposta pode ecoar o conteúdo da mensagem
+            # Só o status no log: a resposta pode ecoar o conteúdo da mensagem
             log.warning("Bot API respondeu %s", r.status_code)
+            try:
+                last_error = r.json().get("description")
+            except ValueError:
+                last_error = f"HTTP {r.status_code}"
             if r.status_code < 500:
                 return False
         except httpx.HTTPError as exc:
             log.warning("Falha ao chamar o Bot API (%s), tentativa %d", type(exc).__name__, attempt)
+            last_error = f"sem conexão ({type(exc).__name__})"
         await asyncio.sleep(2**attempt)
     return False
