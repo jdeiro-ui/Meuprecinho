@@ -6,7 +6,7 @@ from urllib.parse import quote, urlsplit
 from fastapi import APIRouter, BackgroundTasks, Form, Request
 from sqlalchemy import select
 
-from . import linking, monitor
+from . import affiliate, linking, monitor
 from .models import PricePoint, Product, Store, utcnow
 from .pricing import find_url, host_of, parse_brl
 from .stores_catalog import BY_DOMAIN, CATALOG
@@ -42,6 +42,7 @@ async def product_add(request: Request, db: DB, background: BackgroundTasks, url
         return back("/products")
     original = link if linking.needs_resolving(link) else None
     link = (await linking.resolve(link)).split("#")[0]  # links curtos e páginas de afiliado
+    link = affiliate.clean_url(link)  # sem códigos de afiliado/rastreio de terceiros
     if db.scalar(select(Product).where(Product.url == link)):
         flash(request, "Esse produto já está na lista", "err")
         return back("/products")

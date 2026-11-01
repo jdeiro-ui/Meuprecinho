@@ -5,11 +5,11 @@ import secrets
 import zlib
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
-from . import monitor
+from . import affiliate, monitor
 from .db import SessionLocal
-from .models import Setting
+from .models import Product, Setting
 from .web import BASE
 
 router = APIRouter()
@@ -62,3 +62,18 @@ async def result(request: Request, id: int, status: int = 0, error: str = ""):
     html = data.decode("utf-8", errors="replace") if data and not error else None
     await monitor.process_collected(id, status, html, error[:200] or None)
     return {"ok": True}
+
+
+@router.get("/r/{product_id}", include_in_schema=False)
+def buy(product_id: int, s: str = ""):
+    """Botão "Comprar": conta o clique e leva ao link com o código de afiliado do app."""
+    if not hmac.compare_digest(s, affiliate.click_sig(product_id)):
+        raise HTTPException(status_code=404)
+    with SessionLocal() as db:
+        p = db.get(Product, product_id)
+        if p is None:
+            raise HTTPException(status_code=404)
+        p.clicks = (p.clicks or 0) + 1
+        db.commit()
+        target = affiliate.buy_url(p.url)
+    return RedirectResponse(target, status_code=302, headers={"Referrer-Policy": "no-referrer"})

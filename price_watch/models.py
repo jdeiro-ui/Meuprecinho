@@ -67,6 +67,7 @@ class Product(Base):
     last_notified_cents: Mapped[int | None] = mapped_column(Integer)
     available: Mapped[bool | None] = mapped_column(Boolean)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    clicks: Mapped[int] = mapped_column(Integer, default=0)  # cliques em "Comprar"
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     last_error: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

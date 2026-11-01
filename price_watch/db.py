@@ -39,6 +39,7 @@ _NEW_COLUMNS = [
     ("stores", "fetch_via", "VARCHAR(8) NOT NULL DEFAULT 'vm'",
      "UPDATE stores SET fetch_via = 'home' WHERE domain IN ({home})"),
     ("products", "source_url", "VARCHAR(2000)", None),
+    ("products", "clicks", "INTEGER NOT NULL DEFAULT 0", None),
 ]
 
 

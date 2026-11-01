@@ -20,7 +20,7 @@
     {% if not a.delivered %}<span class="chip bad">não entregue</span>{% endif %}
   </div>
   <p class="snippet">{{ a.snippet }}</p>
-  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener" class="btn soft small">{{ icon('external', 16) }} {{ 'Ver na loja' if a.source == 'price' else 'Abrir no Telegram' }}</a>{% endif %}
+  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener{{ ' sponsored' if a.source == 'price' }}" class="btn soft small">{{ icon('external', 16) }} {{ 'Comprar na loja' if a.source == 'price' else 'Abrir no Telegram' }}</a>{% endif %}
 </article>
 {% else %}
 <div class="empty">{{ icon('bell', 40) }}<p>Nenhum aviso ainda.</p><small>Promoções do Telegram e quedas de preço aparecem aqui e no seu bot.</small></div>

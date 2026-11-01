@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     # App criado em developers.mercadolivre.com.br (API oficial de itens/preços)
     ML_CLIENT_ID: str = ""
     ML_CLIENT_SECRET: str = ""
+    # Códigos de afiliado do app (links de compra)
+    AMAZON_TAG: str = ""      # ex.: meuprecinho-20
+    ML_MATT_WORD: str = ""    # ex.: jldeiro
+    ML_MATT_TOOL: str = ""    # ex.: 75607604
 
     @property
     def db_url(self) -> str:

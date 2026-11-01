@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from . import fetcher, linking, mercadolivre, notifier
+from . import affiliate, fetcher, linking, mercadolivre, notifier
 from .db import SessionLocal
 from .models import Alert, PricePoint, Product, utcnow
 from .pricing import extract, format_brl, host_of, should_notify
@@ -243,7 +243,7 @@ def _save_result(product_id: int, ex, error: str | None) -> dict | None:
         if not reason:
             return None
         return {"store": p.store.name, "name": p.name or "Produto", "old": old, "new": ex.price,
-                "target": p.target_cents, "reason": reason, "url": p.source_url or p.url}
+                "target": p.target_cents, "reason": reason, "url": affiliate.buy_url(p.url)}
 
 
 def _save_alert(a: dict, ok: bool) -> None:

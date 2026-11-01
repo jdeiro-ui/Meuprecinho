@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import get_db
+from .affiliate import click_sig
 from .pricing import format_brl
 from .telegram import manager
 
@@ -48,6 +49,7 @@ def _local(dt: datetime | None, fmt: str = "%d/%m %H:%M") -> str:
 
 
 templates.env.filters["local"] = _local
+templates.env.globals["buy_link"] = lambda p: f"/r/{p.id}?s={click_sig(p.id)}"
 templates.env.filters["brl"] = format_brl
 templates.env.filters["ago"] = _ago
 

@@ -95,7 +95,7 @@ def test_dados_do_produto_na_pagina_social():
     assert linking.ml_social_offer("<html>nada</html>") is None
 
 
-def test_mercado_livre_lido_pelo_link_de_afiliado_e_ver_na_loja_usa_o_link(monkeypatch):
+def test_mercado_livre_lido_pelo_link_de_afiliado_e_aviso_usa_link_do_app(monkeypatch):
     from price_watch import mercadolivre, notifier
     from price_watch.config import get_settings
 
@@ -103,6 +103,8 @@ def test_mercado_livre_lido_pelo_link_de_afiliado_e_ver_na_loja_usa_o_link(monke
     s = get_settings()
     monkeypatch.setattr(s, "ML_CLIENT_ID", "1")
     monkeypatch.setattr(s, "ML_CLIENT_SECRET", "2")
+    monkeypatch.setattr(s, "ML_MATT_WORD", "meuapp")
+    monkeypatch.setattr(s, "ML_MATT_TOOL", "999")
     html = SOCIAL_HTML.replace('"polycards":[{"metadata":{"id":"MLB9990000009"}}],',
                                '"polycards":[{"metadata":{"id":"MLB4232914111"},"price":{"current_price":{"value":79}}}],', 1)
     monkeypatch.setattr(linking, "transport", httpx.MockTransport(
@@ -129,7 +131,8 @@ def test_mercado_livre_lido_pelo_link_de_afiliado_e_ver_na_loja_usa_o_link(monke
         assert p.url == "https://produto.mercadolivre.com.br/MLB-4232914111"
         assert p.source_url == "https://meli.la/1KneFL7"
         assert p.current_cents == 7900 and p.last_error is None and p.name == "Camiseta Tech Light"
-    assert len(sent) == 1 and "https://meli.la/1KneFL7" in sent[0]   # aviso leva ao link de afiliado
+    # aviso leva ao link de compra com o código de afiliado do app
+    assert len(sent) == 1 and "MLB-4232914111?matt_word=meuapp&amp;matt_tool=999" in sent[0]
 
     # link comum sem afiliado: a API recusa e o app explica o que fazer
     def api_blocked(request):

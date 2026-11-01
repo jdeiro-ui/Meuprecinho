@@ -20,4 +20,6 @@
 {% for p in products %}{% include "_product_card.html" %}{% else %}
 <div class="empty">{{ icon('tag', 40) }}<p>Nenhum produto ainda.</p><small>Cole o link de um produto acima para começar.</small></div>
 {% endfor %}
+<p class="disclosure">Os links de compra do MeuPrecinho são links de afiliado: ao comprar por eles, o app pode
+  receber uma comissão da loja, sem custo extra para você. É isso que mantém o app gratuito.</p>
 {% endblock %}

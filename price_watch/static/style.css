@@ -309,3 +309,5 @@ label.check input { width: 22px; height: 22px; margin: 0; accent-color: var(--br
 }
 .cmd code { background: none; color: inherit; padding: 0; font-size: inherit; }
 #coletor form { margin-top: 12px; }
+
+.disclosure { color: var(--muted); font-size: .78rem; text-align: center; margin: 20px 8px 8px; }

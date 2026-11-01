@@ -12,7 +12,7 @@
         {% if p.target_cents %}<span class="chip {{ 'ok' if p.current_cents and p.current_cents <= p.target_cents }}">alvo {{ p.target_cents|brl }}</span>{% endif %}
         {% if p.available == false %}<span class="chip bad">indisponível</span>{% endif %}
       </div>
-      <small>Consultado {{ p.last_checked_at|ago }}</small>
+      <small>Consultado {{ p.last_checked_at|ago }}{% if p.clicks %} · {{ p.clicks }} clique{{ 's' if p.clicks != 1 }}{% endif %}</small>
     </div>
   </div>
   {% if p.last_error %}<div class="toast err">{{ icon('alert', 20) }}<span>Última leitura falhou: {{ p.last_error }}.</span></div>{% endif %}
@@ -27,7 +27,7 @@
   <div class="chart-scale"><small>{{ chart.lo|brl }}</small><small>{{ chart.hi|brl }}</small></div>
   {% endif %}
   <div class="row-actions">
-    <a href="{{ p.source_url or p.url }}" target="_blank" rel="noopener" class="btn primary">{{ icon('external', 18) }} Ver na loja</a>
+    <a href="{{ buy_link(p) }}" target="_blank" rel="noopener sponsored" class="btn primary">{{ icon('external', 18) }} Comprar na loja</a>
     <form method="post" action="/products/{{ p.id }}/check"><button class="btn soft">{{ icon('refresh', 18) }} Consultar</button></form>
   </div>
 </section>
