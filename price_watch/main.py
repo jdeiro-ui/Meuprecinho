@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -99,13 +100,33 @@ def login_form(request: Request):
     return render(request, "login.html")
 
 
+# Bloqueio por IP após muitas senhas erradas (em memória; zera ao reiniciar)
+MAX_FAILS, FAIL_WINDOW = 5, 15 * 60
+_fails: dict[str, list[float]] = {}
+
+
+def _recent_fails(ip: str) -> list[float]:
+    now = time.monotonic()
+    recent = [t for t in _fails.get(ip, []) if now - t < FAIL_WINDOW]
+    if recent:
+        _fails[ip] = recent
+    else:
+        _fails.pop(ip, None)
+    return recent
+
+
 @app.post("/login")
 async def login(request: Request, db: DB, username: str = Form(), password: str = Form()):
+    ip = request.client.host if request.client else "?"
+    if len(_recent_fails(ip)) >= MAX_FAILS:
+        return render(request, "login.html", error="Muitas tentativas. Tente de novo em 15 minutos.")
     user = db.scalar(select(User).where(User.username == username.strip()))
     if user and await asyncio.to_thread(verify_password, password, user.password_hash):
+        _fails.pop(ip, None)
         request.session.clear()
         request.session["uid"] = user.id
         return back("/")
+    _fails.setdefault(ip, []).append(time.monotonic())
     await asyncio.sleep(1.5)  # freia tentativas de força bruta
     return render(request, "login.html", error="Usuário ou senha inválidos")
 
