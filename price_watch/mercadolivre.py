@@ -180,18 +180,72 @@ async def _access_token() -> str:
 
 # ---------- preço ----------
 
-async def _api_get(c: httpx.AsyncClient, path: str, token: str) -> dict:
+class ApiError(FetchError):
+    def __init__(self, status: int, msg: str):
+        self.status = status
+        super().__init__(msg)
+
+
+def _why(r: httpx.Response) -> str:
+    """Motivo curto devolvido pelo Mercado Livre (ex.: blocked_by=PolicyAgent)."""
+    try:
+        b = r.json()
+    except ValueError:
+        return ""
+    if not isinstance(b, dict):
+        return ""
+    parts = [str(b[k]) for k in ("code", "error", "blocked_by") if b.get(k)]
+    if b.get("message"):
+        parts.append(str(b["message"])[:120])
+    return "; ".join(dict.fromkeys(parts))[:200]
+
+
+async def _api_get(c: httpx.AsyncClient, path: str, token: str):
     try:
         r = await c.get(path, headers={"Authorization": f"Bearer {token}"})
     except httpx.HTTPError as e:
         raise FetchError(f"sem resposta da API do Mercado Livre ({type(e).__name__})") from e
+    if r.status_code == 200:
+        return r.json()
+    why = _why(r)
+    suffix = f": {why}" if why else ""
     if r.status_code == 404:
-        raise FetchError("anúncio não encontrado no Mercado Livre")
+        raise ApiError(404, "anúncio não encontrado no Mercado Livre")
     if r.status_code in (401, 403):
-        raise FetchError(f"a API do Mercado Livre recusou o acesso (HTTP {r.status_code})")
-    if r.status_code != 200:
-        raise FetchError(f"a API do Mercado Livre respondeu HTTP {r.status_code}")
-    return r.json()
+        raise ApiError(r.status_code, f"a API do Mercado Livre recusou o acesso (HTTP {r.status_code}{suffix})")
+    raise ApiError(r.status_code, f"a API do Mercado Livre respondeu HTTP {r.status_code}{suffix}")
+
+
+async def _item(c: httpx.AsyncClient, ml_id: str, token: str) -> Extracted:
+    """Anúncio: tenta /items; se recusado, a consulta em lote e, por fim, só o preço."""
+    def from_item(item: dict) -> Extracted:
+        return Extracted(
+            price=parse_brl(item.get("price")),
+            name=item.get("title"),
+            image=_picture(item),
+            available=item.get("status") == "active" and (item.get("available_quantity") or 0) > 0,
+        )
+
+    try:
+        return from_item(await _api_get(c, f"/items/{ml_id}", token))
+    except ApiError as first:
+        if first.status not in (401, 403):
+            raise
+        try:
+            batch = await _api_get(c, f"/items?ids={ml_id}", token)
+            entry = batch[0] if isinstance(batch, list) and batch else {}
+            if entry.get("code") == 200 and isinstance(entry.get("body"), dict):
+                return from_item(entry["body"])
+        except ApiError:
+            pass
+        try:
+            sale = await _api_get(c, f"/items/{ml_id}/sale_price?context=channel_marketplace", token)
+            price = parse_brl(sale.get("amount"))
+            if price:
+                return Extracted(price=price, available=True)
+        except ApiError:
+            pass
+        raise first
 
 
 def _picture(d: dict) -> str | None:
@@ -209,13 +263,7 @@ async def fetch_price(url: str) -> Extracted:
     token = await _access_token()
     async with _client() as c:
         if kind == "item":
-            item = await _api_get(c, f"/items/{ml_id}", token)
-            return Extracted(
-                price=parse_brl(item.get("price")),
-                name=item.get("title"),
-                image=_picture(item),
-                available=item.get("status") == "active" and (item.get("available_quantity") or 0) > 0,
-            )
+            return await _item(c, ml_id, token)
         prod = await _api_get(c, f"/products/{ml_id}", token)
         winner = prod.get("buy_box_winner") or {}
         price = parse_brl(winner.get("price"))

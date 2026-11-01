@@ -188,3 +188,34 @@ def test_conexao_sem_offline_access_aparece_e_avisa(ml, monkeypatch):
     assert mercadolivre.status()["expired"]
     with pytest.raises(FetchError, match="offline_access"):
         asyncio.run(mercadolivre._access_token())
+
+
+def test_items_recusado_tenta_lote_e_preco_e_mostra_motivo(ml, monkeypatch):
+    mercadolivre._put({"ml_refresh_token": "RT0", "ml_access_token": "AT0", "ml_expires_at": int(time.time()) + 999})
+    mode = {"batch": True}
+
+    def handler(request):
+        path = request.url.path
+        if path == "/items/MLB7770000007":
+            return httpx.Response(403, json={"blocked_by": "PolicyAgent", "code": "PA_UNAUTHORIZED_RESULT_FROM_POLICIES",
+                                             "message": "At least one policy returned UNAUTHORIZED."})
+        if path == "/items" and mode["batch"]:
+            return httpx.Response(200, json=[{"code": 200, "body": {"title": "Camiseta", "price": 79, "status": "active",
+                                                                     "available_quantity": 3}}])
+        if path == "/items":
+            return httpx.Response(403, json={})
+        if path == "/items/MLB7770000007/sale_price" and mode.get("sale"):
+            return httpx.Response(200, json={"amount": 75.5})
+        return httpx.Response(403, json={"code": "PA_UNAUTHORIZED_RESULT_FROM_POLICIES"})
+
+    monkeypatch.setattr(mercadolivre, "transport", httpx.MockTransport(handler))
+    url = "https://produto.mercadolivre.com.br/MLB-7770000007"
+    assert asyncio.run(mercadolivre.fetch_price(url)).price == 7900   # pelo lote
+
+    mode.update(batch=False, sale=True)
+    assert asyncio.run(mercadolivre.fetch_price(url)).price == 7550   # só o preço
+
+    mode.update(sale=False)
+    with pytest.raises(FetchError) as exc:
+        asyncio.run(mercadolivre.fetch_price(url))
+    assert "HTTP 403" in str(exc.value) and "PolicyAgent" in str(exc.value)
