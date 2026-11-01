@@ -15,7 +15,7 @@ from .web import DB, Auth, back, flash, render
 router = APIRouter(dependencies=[Auth])
 
 READ_MODES = {"http": "HTTP", "browser": "Navegador"}
-FETCH_VIA = {"vm": "Servidor", "home": "Celular de casa"}
+FETCH_VIA = {"vm": "Servidor", "home": "Celular de casa", "api": "API oficial (Mercado Livre)"}
 
 
 # ---------- produtos ----------

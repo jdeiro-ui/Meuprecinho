@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from . import fetcher, notifier
+from . import fetcher, mercadolivre, notifier
 from .db import SessionLocal
 from .models import Alert, PricePoint, Product, utcnow
 from .pricing import extract, format_brl, host_of, should_notify
@@ -49,8 +49,9 @@ def due_product_ids(via: str = "vm", limit: int = BATCH) -> list[int]:
 
 
 async def check_due() -> None:
-    for pid in await asyncio.to_thread(due_product_ids):
-        await check_product(pid)
+    for via in ("vm", "api"):
+        for pid in await asyncio.to_thread(due_product_ids, via):
+            await check_product(pid)
 
 
 async def check_product(product_id: int) -> None:
@@ -59,7 +60,18 @@ async def check_product(product_id: int) -> None:
         p = db.get(Product, product_id)
         if p is None:
             return
-        url, mode = p.url, p.store.read_mode
+        url, mode, via = p.url, p.store.read_mode, p.store.fetch_via
+
+    if via == "api":  # API oficial (Mercado Livre): dados prontos, sem baixar página
+        try:
+            ex, error = await mercadolivre.fetch_price(url), None
+            error = None if ex.price else "a API não informou preço para este anúncio"
+        except fetcher.FetchError as e:
+            ex, error = None, str(e)
+        except Exception as e:  # noqa: BLE001
+            ex, error = None, f"erro inesperado na API ({type(e).__name__})"
+        await _finish(product_id, ex, error)
+        return
 
     async with _lock:
         host = host_of(url)
@@ -153,6 +165,10 @@ async def process_page(product_id: int, html: str | None, error: str | None) -> 
             error = None if ex.price else "preço não encontrado na página"
         except Exception as e:  # noqa: BLE001
             ex, error = None, f"erro ao interpretar a página ({type(e).__name__})"
+    await _finish(product_id, ex, error)
+
+
+async def _finish(product_id: int, ex, error: str | None) -> None:
     alert = await asyncio.to_thread(_save_result, product_id, ex, error)
     if alert:
         ok = await notifier.send(notifier.format_price_alert(**alert))

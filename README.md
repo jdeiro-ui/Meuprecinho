@@ -62,6 +62,10 @@ trecho e link (grupos básicos, que não são supergrupos, não têm link de men
   Instalação: aba **Conta → Coletor de casa** (comando pronto com endereço e token).
   API: `GET /api/coletor/jobs` e `POST /api/coletor/result` (token no cabeçalho
   `Authorization: Bearer`). Se o coletor sumir por 60 min, o bot avisa.
+- **Mercado Livre (API oficial)**: crie um app em developers.mercadolivre.com.br, coloque
+  `ML_CLIENT_ID`/`ML_CLIENT_SECRET` no `.env`, cadastre no app o endereço de redirecionamento
+  mostrado em **Conta → Mercado Livre** e toque em *Conectar*. Os tokens ficam no banco e são
+  renovados sozinhos. Funciona com links de anúncio (`MLB-123…`) e de catálogo (`/p/MLB123…`).
 - **Modo Navegador (opcional)**: para sites que só mostram o preço com JavaScript. Pesa na VM
   pequena; antes, crie um swap de 2 GB:
   ```bash

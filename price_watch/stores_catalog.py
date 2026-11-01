@@ -3,6 +3,7 @@
 - read_mode "browser": sites que só mostram o preço com JavaScript (Playwright).
 - via "home": a loja bloqueia servidores na nuvem; a página é baixada pelo coletor
   no celular de casa (IP residencial). Baseado em testes reais de nov/2026.
+- via "api": preço vem da API oficial da loja (hoje: Mercado Livre).
 """
 
 CATALOG = [
@@ -21,8 +22,8 @@ CATALOG = [
      "note": "bloqueou até pela internet de casa"},
     {"name": "Pichau", "domain": "pichau.com.br", "read_mode": "http", "via": "home",
      "note": "bloqueou até pela internet de casa"},
-    {"name": "Mercado Livre", "domain": "mercadolivre.com.br", "read_mode": "http", "via": "home",
-     "note": "bloqueia; leitura pela API oficial virá na fase 4"},
+    {"name": "Mercado Livre", "domain": "mercadolivre.com.br", "read_mode": "http", "via": "api",
+     "note": ""},
     {"name": "Shopee", "domain": "shopee.com.br", "read_mode": "browser", "via": "vm", "note": "costuma bloquear robôs"},
     {"name": "AliExpress", "domain": "aliexpress.com", "read_mode": "browser", "via": "vm", "note": "costuma bloquear robôs"},
 ]

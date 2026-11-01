@@ -43,6 +43,23 @@
   </form>
 </section>
 {% endif %}
+<section class="card" id="ml">
+  <h2>Mercado Livre</h2>
+  {% if not ml_configured %}
+  <p class="hint">Para ler preços pela API oficial, crie um app em <b>developers.mercadolivre.com.br</b>
+    e coloque <code>ML_CLIENT_ID</code> e <code>ML_CLIENT_SECRET</code> no .env. Use este endereço de redirecionamento:</p>
+  <div class="cmd"><code id="ml-redirect">{{ ml_redirect }}</code></div>
+  <button type="button" class="btn soft small" onclick="navigator.clipboard.writeText(document.getElementById('ml-redirect').textContent).then(()=>{this.textContent='Copiado!'})">Copiar endereço</button>
+  {% elif ml_account %}
+  <p><span class="status inline on"><span class="dot"></span>conectado como <b>{{ ml_account }}</b></span></p>
+  <form method="post" action="/ml/disconnect"><button class="btn ghost small">Desconectar</button></form>
+  {% else %}
+  <p class="hint">App configurado. Conecte sua conta para liberar a leitura de preços.</p>
+  <a href="/ml/connect" class="btn primary block">Conectar Mercado Livre</a>
+  <p class="hint">Endereço de redirecionamento cadastrado no app: <code>{{ ml_redirect }}</code></p>
+  {% endif %}
+</section>
+
 <section class="card" id="coletor">
   <h2>Coletor de casa</h2>
   <p class="hint">Lojas como Amazon e Casas Bahia bloqueiam o servidor. O coletor roda no Termux de um

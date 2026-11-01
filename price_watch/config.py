@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     SESSION_DAYS: int = 30
     TIMEZONE: str = "America/Sao_Paulo"
+    # App criado em developers.mercadolivre.com.br (API oficial de itens/preços)
+    ML_CLIENT_ID: str = ""
+    ML_CLIENT_SECRET: str = ""
 
     @property
     def db_url(self) -> str:

@@ -41,6 +41,11 @@ _NEW_COLUMNS = [
 ]
 
 
+_DATA_MIGRATIONS = [
+    ("mig_ml_api", "UPDATE stores SET fetch_via = 'api' WHERE domain = 'mercadolivre.com.br'"),
+]
+
+
 def init_db() -> None:
     from . import models  # noqa: F401  (registra as tabelas)
 
@@ -55,3 +60,9 @@ def init_db() -> None:
                 conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
                 if after:
                     conn.exec_driver_sql(after.format(home=home))
+        # Migrações de dados que rodam uma única vez
+        done = {r[0] for r in conn.exec_driver_sql("SELECT key FROM settings WHERE key LIKE 'mig_%'")}
+        for key, sql in _DATA_MIGRATIONS:
+            if key not in done:
+                conn.exec_driver_sql(sql)
+                conn.exec_driver_sql("INSERT INTO settings (key, value) VALUES (?, '1')", (key,))

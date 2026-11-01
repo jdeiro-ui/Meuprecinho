@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import secrets
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import monitor, notifier, scheduler
+from . import mercadolivre, monitor, notifier, scheduler
 from .config import get_settings
 from .db import init_db
 from .models import Alert, Rule, TgGroup, User
@@ -253,16 +254,57 @@ async def rule_delete(request: Request, db: DB, rule_id: int):
 
 # ---------- pareamento do Telegram ----------
 
-@app.get("/telegram", dependencies=[Auth])
-def telegram_page(request: Request):
+def _base(request: Request) -> str:
     base = str(request.base_url).rstrip("/")
     if settings.COOKIE_SECURE and base.startswith("http://"):  # atrás de proxy HTTPS (Tailscale, Caddy)
         base = "https://" + base.removeprefix("http://")
+    return base
+
+
+@app.get("/telegram", dependencies=[Auth])
+def telegram_page(request: Request):
+    base = _base(request)
     token = collector_token()
     install = (f"pkg install -y python curl && curl -fsSL {base}/coletor.py -o ~/coletor.py "
                f"&& python ~/coletor.py {base} {token}")
     return render(request, "telegram.html", configured=settings.telegram_configured,
-                  install=install, silent=monitor.collector_silent_for())
+                  install=install, silent=monitor.collector_silent_for(),
+                  ml_configured=mercadolivre.configured(), ml_account=mercadolivre.account(),
+                  ml_redirect=f"{base}/ml/callback")
+
+
+# ---------- Mercado Livre (OAuth) ----------
+
+@app.get("/ml/connect", dependencies=[Auth])
+def ml_connect(request: Request):
+    if not mercadolivre.configured():
+        flash(request, "Preencha ML_CLIENT_ID e ML_CLIENT_SECRET no .env e reinicie o app", "err")
+        return back("/telegram")
+    verifier, challenge = mercadolivre.new_pkce()
+    state = secrets.token_urlsafe(16)
+    request.session["ml_oauth"] = {"state": state, "verifier": verifier}
+    return RedirectResponse(mercadolivre.authorize_url(f"{_base(request)}/ml/callback", state, challenge))
+
+
+@app.get("/ml/callback", dependencies=[Auth])
+async def ml_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    pending = request.session.pop("ml_oauth", None)
+    if error or not code or not pending or not secrets.compare_digest(state, pending["state"]):
+        flash(request, "Conexão com o Mercado Livre cancelada ou inválida. Tente de novo.", "err")
+        return back("/telegram#ml")
+    try:
+        await mercadolivre.exchange_code(code, f"{_base(request)}/ml/callback", pending["verifier"])
+        flash(request, "Mercado Livre conectado")
+    except Exception as e:  # noqa: BLE001
+        flash(request, f"Falha ao conectar: {e}", "err")
+    return back("/telegram#ml")
+
+
+@app.post("/ml/disconnect", dependencies=[Auth])
+def ml_disconnect(request: Request):
+    mercadolivre.disconnect()
+    flash(request, "Mercado Livre desconectado")
+    return back("/telegram#ml")
 
 
 @app.post("/coletor/token", dependencies=[Auth])
