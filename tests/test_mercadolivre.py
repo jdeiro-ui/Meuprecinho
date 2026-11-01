@@ -164,9 +164,9 @@ def test_erro_de_autorizacao_mostra_motivo_e_tenta_sem_pkce(ml, monkeypatch):
     assert seen[:2] == [True, False] and mercadolivre.account() == "SEMPKCE"
 
     def always_bad(request):
-        return httpx.Response(400, json={"error": "invalid_client", "message": "segredo errado: segredo"})
+        return httpx.Response(400, json={"error": "invalid_client", "message": "chave errada: segredo"})
 
     monkeypatch.setattr(mercadolivre, "transport", httpx.MockTransport(always_bad))
     with pytest.raises(FetchError) as exc:
         asyncio.run(mercadolivre.exchange_code("abc", "https://x/ml/callback", "verif"))
-    assert "invalid_client" in str(exc.value) and "segredo errado: ***" in str(exc.value)
+    assert "invalid_client" in str(exc.value) and "chave errada: ***" in str(exc.value)
