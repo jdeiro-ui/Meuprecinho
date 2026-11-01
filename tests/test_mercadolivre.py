@@ -170,3 +170,21 @@ def test_erro_de_autorizacao_mostra_motivo_e_tenta_sem_pkce(ml, monkeypatch):
     with pytest.raises(FetchError) as exc:
         asyncio.run(mercadolivre.exchange_code("abc", "https://x/ml/callback", "verif"))
     assert "invalid_client" in str(exc.value) and "chave errada: ***" in str(exc.value)
+
+
+def test_conexao_sem_offline_access_aparece_e_avisa(ml, monkeypatch):
+    def handler(request):
+        if request.url.path == "/oauth/token":  # sem refresh_token (falta offline_access)
+            return httpx.Response(200, json={"access_token": "AT9", "expires_in": 21600})
+        return httpx.Response(200, json={"nickname": "SEMOFFLINE"})
+
+    monkeypatch.setattr(mercadolivre, "transport", httpx.MockTransport(handler))
+    asyncio.run(mercadolivre.exchange_code("abc", "https://x/ml/callback", "v"))
+    st = mercadolivre.status()
+    assert st["connected"] and not st["renewable"] and mercadolivre.account() == "SEMOFFLINE"
+    assert asyncio.run(mercadolivre._access_token()) == "AT9"   # funciona enquanto o token vale
+
+    mercadolivre._put({"ml_expires_at": 0})
+    assert mercadolivre.status()["expired"]
+    with pytest.raises(FetchError, match="offline_access"):
+        asyncio.run(mercadolivre._access_token())

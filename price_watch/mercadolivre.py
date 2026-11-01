@@ -70,10 +70,21 @@ def _put(values: dict) -> None:
         db.commit()
 
 
+def status() -> dict:
+    """Situação da conexão: conectado, apelido, renovação automática e validade."""
+    d = _get(_KEYS)
+    expires = int(d["ml_expires_at"] or 0)
+    renewable = bool(d["ml_refresh_token"])
+    valid = bool(d["ml_access_token"]) and expires > time.time()
+    return {"connected": renewable or valid, "nickname": d["ml_nickname"] or "conta conectada",
+            "renewable": renewable, "expires_at": expires, "expired": not renewable and not valid
+            and bool(d["ml_access_token"])}
+
+
 def account() -> str | None:
     """Apelido da conta conectada, ou None."""
-    data = _get(("ml_refresh_token", "ml_nickname"))
-    return (data["ml_nickname"] or "conta conectada") if data["ml_refresh_token"] else None
+    st = status()
+    return st["nickname"] if st["connected"] else None
 
 
 def disconnect() -> None:
@@ -152,15 +163,19 @@ async def _access_token() -> str:
     if not configured():
         raise FetchError("API do Mercado Livre não configurada (ML_CLIENT_ID no .env)")
     data = _get(("ml_access_token", "ml_refresh_token", "ml_expires_at"))
+    valid = bool(data["ml_access_token"]) and int(data["ml_expires_at"] or 0) > time.time()
+    if valid:
+        return data["ml_access_token"]
     if not data["ml_refresh_token"]:
+        if data["ml_access_token"]:  # conectado sem offline_access: vale só ~6 h
+            raise FetchError("a conexão com o Mercado Livre expirou; ative offline_access no app "
+                             "do Mercado Livre e conecte de novo na aba Conta")
         raise FetchError("conecte sua conta do Mercado Livre na aba Conta")
-    if not data["ml_access_token"] or int(data["ml_expires_at"] or 0) <= time.time():
-        try:
-            await _token_request({"grant_type": "refresh_token", "refresh_token": data["ml_refresh_token"]})
-        except FetchError:
-            raise FetchError("a conexão com o Mercado Livre expirou; conecte de novo na aba Conta")
-        data = _get(("ml_access_token",))
-    return data["ml_access_token"]
+    try:
+        await _token_request({"grant_type": "refresh_token", "refresh_token": data["ml_refresh_token"]})
+    except FetchError:
+        raise FetchError("a conexão com o Mercado Livre expirou; conecte de novo na aba Conta")
+    return _get(("ml_access_token",))["ml_access_token"]
 
 
 # ---------- preço ----------

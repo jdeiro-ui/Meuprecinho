@@ -269,7 +269,7 @@ def telegram_page(request: Request):
                f"&& python ~/coletor.py {base} {token}")
     return render(request, "telegram.html", configured=settings.telegram_configured,
                   install=install, silent=monitor.collector_silent_for(),
-                  ml_configured=mercadolivre.configured(), ml_account=mercadolivre.account(),
+                  ml_configured=mercadolivre.configured(), ml=mercadolivre.status(),
                   ml_redirect=f"{base}/ml/callback")
 
 
