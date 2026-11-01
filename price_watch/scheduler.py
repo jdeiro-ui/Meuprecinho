@@ -24,6 +24,8 @@ def start() -> None:
     scheduler.add_job(manager.ensure_connected, "interval", seconds=60, id="tg_watchdog")
     scheduler.add_job(_cleanup, "interval", hours=24, id="cleanup")
     scheduler.add_job(monitor.check_due, "interval", seconds=60, id="prices")
+    scheduler.add_job(monitor.collector_watchdog, "interval", minutes=10, id="collector_watchdog",
+                      args=[utcnow()])
     scheduler.start()
 
 

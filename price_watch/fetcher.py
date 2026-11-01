@@ -18,12 +18,16 @@ class FetchError(Exception):
     """Erro com mensagem curta, mostrada na tela do produto."""
 
 
-def _check_blocked(status: int, html: str) -> None:
+def check_response(status: int, html: str) -> None:
     if status in (403, 429, 503):
         raise FetchError(f"a loja bloqueou a leitura (HTTP {status})")
     head = html[:20000].lower()
     if any(m in head for m in _BLOCK_MARKERS) and "application/ld+json" not in head:
         raise FetchError("a loja pediu captcha (bloqueio anti-robô)")
+    if status == 404:
+        raise FetchError("página não encontrada (o produto pode ter saído do ar)")
+    if status >= 400:
+        raise FetchError(f"a loja respondeu HTTP {status}")
 
 
 async def fetch_http(url: str) -> str:
@@ -32,11 +36,7 @@ async def fetch_http(url: str) -> str:
             r = await c.get(url)
         except httpx.HTTPError as e:
             raise FetchError(f"sem resposta da loja ({type(e).__name__})") from e
-    _check_blocked(r.status_code, r.text)
-    if r.status_code == 404:
-        raise FetchError("página não encontrada (o produto pode ter saído do ar)")
-    if r.status_code >= 400:
-        raise FetchError(f"a loja respondeu HTTP {r.status_code}")
+    check_response(r.status_code, r.text)
     return r.text
 
 
@@ -55,7 +55,7 @@ async def fetch_browser(url: str) -> str:
             resp = await page.goto(url, wait_until="domcontentloaded", timeout=45000)
             await asyncio.sleep(3)  # tempo para o JavaScript montar o preço
             html = await page.content()
-            _check_blocked(resp.status if resp else 200, html)
+            check_response(resp.status if resp else 200, html)
             return html
         except FetchError:
             raise

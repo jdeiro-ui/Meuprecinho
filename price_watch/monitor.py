@@ -1,40 +1,51 @@
-"""Consulta periódica dos preços (chamada pelo scheduler a cada minuto)."""
+"""Consulta periódica dos preços.
+
+Lojas "vm" são lidas aqui mesmo (scheduler, a cada minuto). Lojas "home" ficam na
+fila do coletor de casa, que busca as páginas pelo IP residencial e devolve o HTML
+para ser processado por process_page()."""
 
 import asyncio
 import logging
 import time
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
 from . import fetcher, notifier
 from .db import SessionLocal
 from .models import Alert, PricePoint, Product, utcnow
-from .pricing import extract, host_of, should_notify
+from .pricing import extract, format_brl, host_of, should_notify
 
 log = logging.getLogger(__name__)
 
 BATCH = 20          # produtos por rodada
 DOMAIN_GAP = 5.0    # segundos entre acessos à mesma loja (educação com o site)
 HISTORY_EVERY = timedelta(hours=12)  # grava ponto repetido no máximo a cada 12 h
+LEASE = timedelta(minutes=10)        # tempo que um produto fica reservado ao coletor
+COLLECTOR_SILENT = timedelta(minutes=60)  # sem contato por mais que isso = aviso no bot
 
 _lock = asyncio.Lock()  # uma consulta por vez (o Playwright pesa na VM pequena)
 _last_hit: dict[str, float] = {}
+
+# Estado do coletor de casa (em memória; zera ao reiniciar)
+collector = {"last_seen": None, "warned": False}
+_leases: dict[int, datetime] = {}
 
 
 def _aware(dt):
     return dt.replace(tzinfo=UTC) if dt is not None and dt.tzinfo is None else dt
 
 
-def due_product_ids() -> list[int]:
+def due_product_ids(via: str = "vm", limit: int = BATCH) -> list[int]:
     now = utcnow()
     with SessionLocal() as db:
         items = db.scalars(select(Product).where(Product.active)).all()
         due = [p for p in items
-               if p.last_checked_at is None
-               or _aware(p.last_checked_at) + timedelta(minutes=p.store.interval_minutes) <= now]
+               if p.store.fetch_via == via
+               and (p.last_checked_at is None
+                    or _aware(p.last_checked_at) + timedelta(minutes=p.store.interval_minutes) <= now)]
         due.sort(key=lambda p: _aware(p.last_checked_at) or now - timedelta(days=3650))
-        return [p.id for p in due[:BATCH]]
+        return [p.id for p in due[:limit]]
 
 
 async def check_due() -> None:
@@ -43,11 +54,12 @@ async def check_due() -> None:
 
 
 async def check_product(product_id: int) -> None:
+    """Baixa a página pelo próprio servidor e processa."""
     with SessionLocal() as db:
         p = db.get(Product, product_id)
         if p is None:
             return
-        url, mode, selector = p.url, p.store.read_mode, p.store.price_selector
+        url, mode = p.url, p.store.read_mode
 
     async with _lock:
         host = host_of(url)
@@ -55,16 +67,92 @@ async def check_product(product_id: int) -> None:
         if wait > 0:
             await asyncio.sleep(wait)
         try:
-            html = await fetcher.fetch(url, mode)
-            ex = extract(html, url, selector)
-            error = None if ex.price else "preço não encontrado na página"
+            html, error = await fetcher.fetch(url, mode), None
         except fetcher.FetchError as e:
-            ex, error = None, str(e)
+            html, error = None, str(e)
         except Exception as e:  # noqa: BLE001 — uma loja com problema não pode parar as outras
-            ex, error = None, f"erro inesperado na leitura ({type(e).__name__})"
+            html, error = None, f"erro inesperado na leitura ({type(e).__name__})"
         finally:
             _last_hit[host] = time.monotonic()
+    await process_page(product_id, html, error)
 
+
+# ---------- coletor de casa ----------
+
+def collector_jobs(limit: int = 5) -> list[dict]:
+    """Produtos de lojas "home" na hora de consultar, reservados ao coletor."""
+    now = utcnow()
+    collector["last_seen"] = now
+    collector["warned"] = False
+    for pid in [k for k, until in _leases.items() if until <= now]:
+        del _leases[pid]
+    ids = [pid for pid in due_product_ids("home", limit=50) if pid not in _leases][:limit]
+    with SessionLocal() as db:
+        jobs = []
+        for pid in ids:
+            p = db.get(Product, pid)
+            _leases[pid] = now + LEASE
+            jobs.append({"id": p.id, "url": p.url})
+        return jobs
+
+
+async def process_collected(product_id: int, status: int, html: str | None, error: str | None) -> None:
+    _leases.pop(product_id, None)
+    if html is not None and error is None:
+        try:
+            fetcher.check_response(status, html)
+        except fetcher.FetchError as e:
+            html, error = None, str(e)
+    await process_page(product_id, html, error)
+
+
+def request_now(product_id: int) -> None:
+    """"Consultar" de um produto lido pelo coletor: entra na fila já."""
+    _leases.pop(product_id, None)
+    with SessionLocal() as db:
+        if p := db.get(Product, product_id):
+            p.last_checked_at = None
+            db.commit()
+
+
+def collector_silent_for() -> timedelta | None:
+    seen = collector["last_seen"]
+    return None if seen is None else utcnow() - seen
+
+
+async def collector_watchdog(started_at: datetime) -> None:
+    """Avisa uma vez pelo bot se o coletor sumir e houver produtos esperando por ele."""
+    if collector["warned"] or not await asyncio.to_thread(_has_home_products):
+        return
+    silent = collector_silent_for() or (utcnow() - started_at)
+    if silent >= COLLECTOR_SILENT:
+        collector["warned"] = True
+        mins = int(silent.total_seconds() // 60)
+        await notifier.send(f"⚠️ <b>Coletor de casa sem contato há {mins} min.</b>\n"
+                            "Os preços das lojas lidas pelo celular estão parados. "
+                            "Confira se o Termux continua aberto no celular.")
+
+
+def _has_home_products() -> bool:
+    with SessionLocal() as db:
+        return any(p.store.fetch_via == "home" for p in db.scalars(select(Product).where(Product.active)))
+
+
+# ---------- processamento comum ----------
+
+async def process_page(product_id: int, html: str | None, error: str | None) -> None:
+    ex = None
+    if html is not None and error is None:
+        with SessionLocal() as db:
+            p = db.get(Product, product_id)
+            if p is None:
+                return
+            url, selector = p.url, p.store.price_selector
+        try:
+            ex = extract(html, url, selector)
+            error = None if ex.price else "preço não encontrado na página"
+        except Exception as e:  # noqa: BLE001
+            ex, error = None, f"erro ao interpretar a página ({type(e).__name__})"
     alert = await asyncio.to_thread(_save_result, product_id, ex, error)
     if alert:
         ok = await notifier.send(notifier.format_price_alert(**alert))
@@ -112,8 +200,6 @@ def _save_result(product_id: int, ex, error: str | None) -> dict | None:
 
 
 def _save_alert(a: dict, ok: bool) -> None:
-    from .pricing import format_brl
-
     change = f"{format_brl(a['old'])} → {format_brl(a['new'])}" if a["old"] else format_brl(a["new"])
     with SessionLocal() as db:
         db.add(Alert(source="price", group_title=a["store"], keywords=a["reason"],

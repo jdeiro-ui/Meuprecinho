@@ -15,6 +15,7 @@ from .web import DB, Auth, back, flash, render
 router = APIRouter(dependencies=[Auth])
 
 READ_MODES = {"http": "HTTP", "browser": "Navegador"}
+FETCH_VIA = {"vm": "Servidor", "home": "Celular de casa"}
 
 
 # ---------- produtos ----------
@@ -41,7 +42,7 @@ def _store_for(db, url: str) -> Store:
     known = match_store(host, list(BY_DOMAIN))
     if known:
         c = BY_DOMAIN[known]
-        store = Store(name=c["name"], domain=known, read_mode=c["read_mode"])
+        store = Store(name=c["name"], domain=known, read_mode=c["read_mode"], fetch_via=c["via"])
     else:  # loja desconhecida: cria com o domínio como nome
         store = Store(name=host.split(".")[0].capitalize(), domain=host)
     db.add(store)
@@ -64,8 +65,11 @@ def product_add(request: Request, db: DB, background: BackgroundTasks, url: str 
     p = Product(store=store, url=link, name=name.strip() or None, target_cents=parse_brl(target))
     db.add(p)
     db.commit()
-    background.add_task(monitor.check_product, p.id)  # primeira consulta logo após responder
-    flash(request, f"Produto adicionado em {store.name}. Consultando o preço…")
+    if store.fetch_via == "home":
+        flash(request, f"Produto adicionado em {store.name}. O coletor de casa vai consultar o preço.")
+    else:
+        background.add_task(monitor.check_product, p.id)  # primeira consulta logo após responder
+        flash(request, f"Produto adicionado em {store.name}. Consultando o preço…")
     return back("/products")
 
 
@@ -114,7 +118,11 @@ def product_save(request: Request, db: DB, product_id: int, name: str = Form("")
 
 @router.post("/products/{product_id}/check")
 async def product_check(request: Request, db: DB, product_id: int):
-    await monitor.check_product(product_id)
+    p = db.get(Product, product_id)
+    if p and p.store.fetch_via == "home":
+        monitor.request_now(product_id)  # o coletor pega na próxima rodada (até 1 min)
+    elif p:
+        await monitor.check_product(product_id)
     db.expire_all()
     p = db.get(Product, product_id)
     if request.headers.get("HX-Request") and p:
@@ -143,7 +151,8 @@ def _stores_page(request: Request, db, edit: Store | None = None):
     items = db.scalars(select(Store).order_by(Store.name)).all()
     have = {s.domain for s in items}
     suggestions = [c for c in CATALOG if c["domain"] not in have]
-    return render(request, "stores.html", stores=items, modes=READ_MODES, edit=edit, suggestions=suggestions)
+    return render(request, "stores.html", stores=items, modes=READ_MODES, vias=FETCH_VIA, edit=edit,
+                  suggestions=suggestions)
 
 
 @router.get("/stores")
@@ -160,7 +169,7 @@ def store_edit(request: Request, db: DB, store_id: int):
 def store_add_suggested(request: Request, db: DB, domain: str = Form()):
     c = BY_DOMAIN.get(domain)
     if c and not db.scalar(select(Store).where(Store.domain == domain)):
-        db.add(Store(name=c["name"], domain=domain, read_mode=c["read_mode"]))
+        db.add(Store(name=c["name"], domain=domain, read_mode=c["read_mode"], fetch_via=c["via"]))
         db.commit()
         flash(request, f"{c['name']} adicionada")
     return back("/stores")
@@ -170,7 +179,7 @@ def store_add_suggested(request: Request, db: DB, domain: str = Form()):
 @router.post("/stores/{store_id}")
 def store_save(request: Request, db: DB, name: str = Form(), domain: str = Form(),
                interval_minutes: int = Form(60), read_mode: str = Form("http"),
-               price_selector: str = Form(""), store_id: int | None = None):
+               price_selector: str = Form(""), fetch_via: str = Form("vm"), store_id: int | None = None):
     domain = clean_domain(domain)
     if not name.strip() or not domain or "." not in domain:
         flash(request, "Informe nome e um domínio válido (ex.: loja.com.br)", "err")
@@ -187,6 +196,7 @@ def store_save(request: Request, db: DB, name: str = Form(), domain: str = Form(
     store.interval_minutes = max(5, min(interval_minutes, 7 * 24 * 60))
     store.read_mode = read_mode if read_mode in READ_MODES else "http"
     store.price_selector = price_selector.strip() or None
+    store.fetch_via = fetch_via if fetch_via in FETCH_VIA else "vm"
     db.add(store)
     db.commit()
     flash(request, "Loja salva")

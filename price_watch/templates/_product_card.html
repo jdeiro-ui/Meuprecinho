@@ -19,7 +19,8 @@
     </div>
   </a>
   <footer class="product-foot">
-    <small>{{ 'Consultado ' ~ (p.last_checked_at|ago) if p.last_checked_at else 'Aguardando a primeira consulta' }}</small>
+    <small>{% if p.last_checked_at %}Consultado {{ p.last_checked_at|ago }}{% if p.store.fetch_via == 'home' %} · via casa{% endif %}
+      {% elif p.store.fetch_via == 'home' %}Na fila do coletor de casa{% else %}Aguardando a primeira consulta{% endif %}</small>
     <button class="btn soft small" hx-post="/products/{{ p.id }}/check" hx-target="#p{{ p.id }}" hx-swap="outerHTML"
             hx-indicator="#p{{ p.id }}">{{ icon('refresh', 16) }} Consultar</button>
   </footer>

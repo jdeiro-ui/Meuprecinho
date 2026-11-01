@@ -43,6 +43,31 @@
   </form>
 </section>
 {% endif %}
+<section class="card" id="coletor">
+  <h2>Coletor de casa</h2>
+  <p class="hint">Lojas como Amazon e Casas Bahia bloqueiam o servidor. O coletor roda no Termux de um
+    celular Android ligado no Wi-Fi de casa e busca essas páginas pela sua internet.</p>
+  <p>{% if silent is none %}<span class="status inline off"><span class="dot"></span>ainda não conectou</span>
+     {% elif silent.total_seconds() < 180 %}<span class="status inline on"><span class="dot"></span>conectado</span>
+     {% else %}<span class="status inline off"><span class="dot"></span>sem contato há {{ (silent.total_seconds() // 60)|int }} min</span>{% endif %}</p>
+  <details>
+    <summary class="link-like">Como instalar no celular</summary>
+    <ol class="steps">
+      <li>Instale o <b>Termux</b> (Play Store ou F-Droid) e, se o painel for pelo Tailscale, deixe o Tailscale ligado nesse celular.</li>
+      <li>Copie o comando abaixo, cole no Termux e aperte Enter:</li>
+    </ol>
+    <div class="cmd"><code id="install-cmd">{{ install }}</code></div>
+    <button type="button" class="btn soft small" onclick="navigator.clipboard.writeText(document.getElementById('install-cmd').textContent).then(()=>{this.textContent='Copiado!'})">Copiar comando</button>
+    <ol class="steps" start="3">
+      <li>Em <b>Configurações → Apps → Termux → Bateria</b>, escolha <b>Sem restrições</b>.</li>
+      <li>Deixe o Termux aberto. Para religar depois: <code>python ~/coletor.py</code></li>
+    </ol>
+    <form method="post" action="/coletor/token" onsubmit="return confirm('Gerar token novo? O coletor atual para até você rodar o comando novo.')">
+      <button class="btn ghost small">Gerar token novo</button>
+    </form>
+  </details>
+</section>
+
 <form method="post" action="/logout" class="actions">
   <button class="btn soft">{{ icon('logout', 18) }} Sair do painel</button>
 </form>

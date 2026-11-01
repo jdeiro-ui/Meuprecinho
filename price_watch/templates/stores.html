@@ -16,7 +16,7 @@
     </form>
     {% endfor %}
   </div>
-  <p class="hint legend"><i class="warn-dot"></i> costuma bloquear leitura automática</p>
+  <p class="hint legend"><i class="warn-dot"></i> bloqueou nos testes, mesmo pela internet de casa</p>
 </section>
 {% endif %}
 
@@ -38,6 +38,14 @@
       </label>
     </div>
     <p class="hint">HTTP é mais leve. Use "Navegador" para sites que só mostram o preço com JavaScript.</p>
+    <label>Onde ler
+      <select name="fetch_via">
+        {% for k, v in vias.items() %}
+        <option value="{{ k }}" {{ 'selected' if (edit and edit.fetch_via == k) or (not edit and k == 'vm') }}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="hint">"Celular de casa" usa o coletor (aba Conta), para lojas que bloqueiam o servidor.</p>
     <label>Seletor CSS do preço (avançado, opcional)
       <input name="price_selector" value="{{ edit.price_selector or '' if edit }}" placeholder=".preco-final" autocapitalize="none"></label>
     <p class="hint">Só preencha se o app não encontrar o preço sozinho nessa loja.</p>
@@ -57,6 +65,7 @@
     <div class="chips">
       <span class="chip">a cada {{ s.interval_minutes }} min</span>
       <span class="chip">{{ modes[s.read_mode] }}</span>
+      {% if s.fetch_via == 'home' %}<span class="chip hot">via celular de casa</span>{% endif %}
       <span class="chip">{{ s.products|length }} produto{{ 's' if s.products|length != 1 }}</span>
     </div>
   </div>

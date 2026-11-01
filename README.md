@@ -54,7 +54,14 @@ trecho e link (grupos básicos, que não são supergrupos, não têm link de men
 - **Como o preço é lido**: seletor CSS da loja (se você definir) → dados estruturados
   schema.org (JSON-LD) → metatags → seletores conhecidos (Amazon, Mercado Livre).
 - **Bloqueios**: várias lojas barram robôs vindos de servidores na nuvem (captcha ou HTTP 403).
-  O produto mostra "erro na leitura" com o motivo. Nos testes funcionaram Americanas e KaBuM.
+  O produto mostra "erro na leitura" com o motivo. Na VM funcionaram KaBuM e Americanas.
+- **Coletor de casa**: para essas lojas, a loja fica com *Onde ler = Celular de casa* e as páginas
+  são baixadas por `coletor.py`, que roda no Termux de um Android no Wi-Fi de casa (IP
+  residencial) e devolve o HTML ao servidor, que extrai o preço. Pela internet de casa passaram
+  Amazon, Casas Bahia e Carrefour; Magalu, Pichau e Mercado Livre bloquearam até lá.
+  Instalação: aba **Conta → Coletor de casa** (comando pronto com endereço e token).
+  API: `GET /api/coletor/jobs` e `POST /api/coletor/result` (token no cabeçalho
+  `Authorization: Bearer`). Se o coletor sumir por 60 min, o bot avisa.
 - **Modo Navegador (opcional)**: para sites que só mostram o preço com JavaScript. Pesa na VM
   pequena; antes, crie um swap de 2 GB:
   ```bash

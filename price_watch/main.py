@@ -11,10 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import notifier, scheduler
+from . import monitor, notifier, scheduler
 from .config import get_settings
 from .db import init_db
 from .models import Alert, Rule, TgGroup, User
+from .routes_collector import collector_token
+from .routes_collector import router as collector_router
 from .routes_prices import router as prices_router
 from .security import verify_password
 from .telegram import PairingError, manager
@@ -51,6 +53,7 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 app.include_router(prices_router)
+app.include_router(collector_router)
 
 
 # ---------- autenticação ----------
@@ -252,7 +255,21 @@ async def rule_delete(request: Request, db: DB, rule_id: int):
 
 @app.get("/telegram", dependencies=[Auth])
 def telegram_page(request: Request):
-    return render(request, "telegram.html", configured=settings.telegram_configured)
+    base = str(request.base_url).rstrip("/")
+    if settings.COOKIE_SECURE and base.startswith("http://"):  # atrás de proxy HTTPS (Tailscale, Caddy)
+        base = "https://" + base.removeprefix("http://")
+    token = collector_token()
+    install = (f"pkg install -y python curl && curl -fsSL {base}/coletor.py -o ~/coletor.py "
+               f"&& python ~/coletor.py {base} {token}")
+    return render(request, "telegram.html", configured=settings.telegram_configured,
+                  install=install, silent=monitor.collector_silent_for())
+
+
+@app.post("/coletor/token", dependencies=[Auth])
+def collector_new_token(request: Request):
+    collector_token(regenerate=True)
+    flash(request, "Token novo gerado. Rode o comando de instalação de novo no celular.")
+    return back("/telegram")
 
 
 async def _pairing_step(request: Request, coro) -> RedirectResponse:

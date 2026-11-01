@@ -40,6 +40,9 @@ class Store(Base):
     read_mode: Mapped[str] = mapped_column(String(16), default="http")
     # Seletor CSS opcional para lojas em que a leitura automática falha
     price_selector: Mapped[str | None] = mapped_column(String(255))
+    # Quem baixa a página: "vm" (o próprio servidor) ou "home" (coletor no celular de casa,
+    # com IP residencial, para lojas que bloqueiam servidores na nuvem)
+    fetch_via: Mapped[str] = mapped_column(String(8), default="vm")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     products: Mapped[list["Product"]] = relationship(
         back_populates="store", cascade="all, delete-orphan", passive_deletes=True
@@ -129,3 +132,12 @@ class SeenMessage(Base):
     chat_id: Mapped[int] = mapped_column(BigInteger)
     message_id: Mapped[int] = mapped_column(BigInteger)
     seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class Setting(Base):
+    """Configurações guardadas no banco (ex.: token do coletor de casa)."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)

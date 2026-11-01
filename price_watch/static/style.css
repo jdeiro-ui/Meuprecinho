@@ -298,3 +298,14 @@ label.check input { width: 22px; height: 22px; margin: 0; accent-color: var(--br
 .warn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--hot); }
 .suggest-btn .warn-dot { position: absolute; top: 2px; right: 4px; }
 .legend { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; }
+
+/* coletor de casa */
+.link-like { color: var(--brand-ink); font-weight: 600; cursor: pointer; margin: 4px 0; }
+.steps { padding-left: 20px; margin: 10px 0; }
+.steps li { margin: 6px 0; }
+.cmd {
+  background: #120e26; color: #d9d2ff; border-radius: 12px; padding: 12px; margin: 8px 0;
+  font: .8rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere;
+}
+.cmd code { background: none; color: inherit; padding: 0; font-size: inherit; }
+#coletor form { margin-top: 12px; }
