@@ -1,6 +1,32 @@
 {% extends "base.html" %}
-{% block heading %}Conta{% endblock %}
-{% block subtitle %}<p class="sub">Telegram e sessão do painel</p>{% endblock %}
+{% block heading %}Conta<script>
+  // O login do Mercado Livre abre no navegador; ao voltar para o app, recarrega a tela
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    try {
+      const t = Number(localStorage.getItem("ml-pending") || 0);
+      if (t && Date.now() - t < 15 * 60 * 1000) {
+        localStorage.removeItem("ml-pending");
+        location.reload();
+      }
+    } catch (e) {}
+  });
+</script>
+{% endblock %}
+{% block subtitle %}<p class="sub">Telegram e sessão do painel</p><script>
+  // O login do Mercado Livre abre no navegador; ao voltar para o app, recarrega a tela
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    try {
+      const t = Number(localStorage.getItem("ml-pending") || 0);
+      if (t && Date.now() - t < 15 * 60 * 1000) {
+        localStorage.removeItem("ml-pending");
+        location.reload();
+      }
+    } catch (e) {}
+  });
+</script>
+{% endblock %}
 {% block content %}
 {% if not configured %}
 <div class="toast err">{{ icon('alert', 20) }}<span>Defina API_ID e API_HASH no .env e reinicie o app.</span></div>
@@ -55,7 +81,7 @@
   <form method="post" action="/ml/disconnect"><button class="btn ghost small">Desconectar</button></form>
   {% else %}
   <p class="hint">App configurado. Conecte sua conta para liberar a leitura de preços.</p>
-  <a href="/ml/connect" class="btn primary block">Conectar Mercado Livre</a>
+  <a href="/ml/connect" class="btn primary block" onclick="try{localStorage.setItem('ml-pending', Date.now())}catch(e){}">Conectar Mercado Livre</a>
   <p class="hint">Endereço de redirecionamento cadastrado no app: <code>{{ ml_redirect }}</code></p>
   {% endif %}
 </section>
@@ -88,4 +114,17 @@
 <form method="post" action="/logout" class="actions">
   <button class="btn soft">{{ icon('logout', 18) }} Sair do painel</button>
 </form>
+<script>
+  // O login do Mercado Livre abre no navegador; ao voltar para o app, recarrega a tela
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    try {
+      const t = Number(localStorage.getItem("ml-pending") || 0);
+      if (t && Date.now() - t < 15 * 60 * 1000) {
+        localStorage.removeItem("ml-pending");
+        location.reload();
+      }
+    } catch (e) {}
+  });
+</script>
 {% endblock %}
