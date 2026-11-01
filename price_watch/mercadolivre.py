@@ -255,15 +255,32 @@ def _picture(d: dict) -> str | None:
     return d.get("secure_thumbnail") or d.get("thumbnail")
 
 
-async def fetch_price(url: str) -> Extracted:
+BLOCKED_HINT = ("o Mercado Livre não libera a leitura deste anúncio pela API; cadastre o "
+                "produto pelo seu link de afiliado (meli.la)")
+
+
+async def fetch_price(url: str, source_url: str | None = None) -> Extracted:
+    from . import linking
+
     ids = parse_ml_id(url)
+    # 1) Link de afiliado: a página que ele abre traz preço, nome e foto do produto
+    if source_url and linking.needs_resolving(source_url):
+        offer = await linking.ml_offer_from_link(source_url)
+        if offer and offer["price"] and (ids is None or offer["id"] == ids[1]):
+            return Extracted(price=offer["price"], name=offer["name"], image=offer["image"], available=True)
+    # 2) API oficial (hoje só libera catálogo e anúncios da própria conta)
     if ids is None:
         raise FetchError("não reconheci o código MLB no link do Mercado Livre")
     kind, ml_id = ids
     token = await _access_token()
     async with _client() as c:
         if kind == "item":
-            return await _item(c, ml_id, token)
+            try:
+                return await _item(c, ml_id, token)
+            except ApiError as e:
+                if e.status == 403 and "access_denied" in str(e):
+                    raise FetchError(BLOCKED_HINT) from e
+                raise
         prod = await _api_get(c, f"/products/{ml_id}", token)
         winner = prod.get("buy_box_winner") or {}
         price = parse_brl(winner.get("price"))

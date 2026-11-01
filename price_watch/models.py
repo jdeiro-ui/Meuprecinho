@@ -55,6 +55,9 @@ class Product(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
     url: Mapped[str] = mapped_column(String(2000), unique=True)
+    # Link original colado pelo usuário quando era curto/de afiliado (ex.: meli.la).
+    # É usado no "Ver na loja" e, no Mercado Livre, para ler o preço.
+    source_url: Mapped[str | None] = mapped_column(String(2000))
     name: Mapped[str | None] = mapped_column(String(300))
     image_url: Mapped[str | None] = mapped_column(String(2000))
     # Valores em centavos

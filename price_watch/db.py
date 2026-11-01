@@ -38,6 +38,7 @@ _NEW_COLUMNS = [
     # Ao surgir o coletor de casa, lojas conhecidas por bloquear servidores passam a usá-lo
     ("stores", "fetch_via", "VARCHAR(8) NOT NULL DEFAULT 'vm'",
      "UPDATE stores SET fetch_via = 'home' WHERE domain IN ({home})"),
+    ("products", "source_url", "VARCHAR(2000)", None),
 ]
 
 

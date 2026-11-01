@@ -122,3 +122,16 @@ def ml_social_offer(html: str) -> dict | None:
             out["name"] = name.strip()
             out["price"] = out["price"] or parse_brl(price)
     return out
+
+
+async def ml_offer_from_link(link: str) -> dict | None:
+    """Abre o link de afiliado (meli.la ou página social) e lê o produto compartilhado."""
+    try:
+        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=25,
+                                     transport=transport) as c:
+            async with c.stream("GET", link) as r:
+                if r.status_code != 200 or not is_ml_social(str(r.url)):
+                    return None
+                return ml_social_offer(await _read(r))
+    except httpx.HTTPError:
+        return None

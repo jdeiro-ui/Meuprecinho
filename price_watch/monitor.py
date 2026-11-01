@@ -71,6 +71,7 @@ async def fix_short_link(product_id: int) -> None:
             db.commit()
             return
         old_store = p.store
+        p.source_url = p.source_url or short
         p.url = final
         p.store = linking.store_for(db, final)
         p.last_error = None
@@ -87,14 +88,14 @@ async def check_product(product_id: int) -> None:
         p = db.get(Product, product_id)
         if p is None:
             return
-        url, mode, via = p.url, p.store.read_mode, p.store.fetch_via
+        url, mode, via, source = p.url, p.store.read_mode, p.store.fetch_via, p.source_url
     if via == "home":  # virou loja do coletor depois de seguir o link curto
         request_now(product_id)
         return
 
     if via == "api":  # API oficial (Mercado Livre): dados prontos, sem baixar página
         try:
-            ex, error = await mercadolivre.fetch_price(url), None
+            ex, error = await mercadolivre.fetch_price(url, source), None
             error = None if ex.price else "a API não informou preço para este anúncio"
         except fetcher.FetchError as e:
             ex, error = None, str(e)
@@ -242,7 +243,7 @@ def _save_result(product_id: int, ex, error: str | None) -> dict | None:
         if not reason:
             return None
         return {"store": p.store.name, "name": p.name or "Produto", "old": old, "new": ex.price,
-                "target": p.target_cents, "reason": reason, "url": p.url}
+                "target": p.target_cents, "reason": reason, "url": p.source_url or p.url}
 
 
 def _save_alert(a: dict, ok: bool) -> None:

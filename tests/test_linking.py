@@ -93,3 +93,49 @@ def test_dados_do_produto_na_pagina_social():
     o = linking.ml_social_offer(html)
     assert o == {"id": "MLB4232914111", "price": 7990, "name": "Camiseta Tech Light", "image": "https://img/c.webp"}
     assert linking.ml_social_offer("<html>nada</html>") is None
+
+
+def test_mercado_livre_lido_pelo_link_de_afiliado_e_ver_na_loja_usa_o_link(monkeypatch):
+    from price_watch import mercadolivre, notifier
+    from price_watch.config import get_settings
+
+    init_db()
+    s = get_settings()
+    monkeypatch.setattr(s, "ML_CLIENT_ID", "1")
+    monkeypatch.setattr(s, "ML_CLIENT_SECRET", "2")
+    html = SOCIAL_HTML.replace('"polycards":[{"metadata":{"id":"MLB9990000009"}}],',
+                               '"polycards":[{"metadata":{"id":"MLB4232914111"},"price":{"current_price":{"value":79}}}],', 1)
+    monkeypatch.setattr(linking, "transport", httpx.MockTransport(
+        lambda r: httpx.Response(301, headers={"location": SOCIAL}) if r.url.host == "meli.la"
+        else httpx.Response(200, text=html)))
+    sent = []
+
+    async def fake_send(text):
+        sent.append(text)
+        return True
+
+    monkeypatch.setattr(notifier, "send", fake_send)
+    with SessionLocal() as db:
+        db.query(Product).filter(Product.url.like("%MLB-4232914111%")).delete()
+        ml = db.query(Store).filter_by(domain="mercadolivre.com.br").first() or \
+            Store(name="Mercado Livre", domain="mercadolivre.com.br", fetch_via="api")
+        p = Product(store=ml, url="https://meli.la/1KneFL7", target_cents=8000)
+        db.add(p)
+        db.commit()
+        pid = p.id
+    asyncio.run(monitor.check_product(pid))  # corrige o link e lê pela página do afiliado
+    with SessionLocal() as db:
+        p = db.get(Product, pid)
+        assert p.url == "https://produto.mercadolivre.com.br/MLB-4232914111"
+        assert p.source_url == "https://meli.la/1KneFL7"
+        assert p.current_cents == 7900 and p.last_error is None and p.name == "Camiseta Tech Light"
+    assert len(sent) == 1 and "https://meli.la/1KneFL7" in sent[0]   # aviso leva ao link de afiliado
+
+    # link comum sem afiliado: a API recusa e o app explica o que fazer
+    def api_blocked(request):
+        return httpx.Response(403, json={"error": "access_denied", "message": "Access to the requested resource is forbidden"})
+
+    monkeypatch.setattr(mercadolivre, "transport", httpx.MockTransport(api_blocked))
+    mercadolivre._put({"ml_refresh_token": "RT", "ml_access_token": "AT", "ml_expires_at": 9999999999})
+    with pytest.raises(Exception, match="link de afiliado"):
+        asyncio.run(mercadolivre.fetch_price("https://produto.mercadolivre.com.br/MLB-4232914111"))

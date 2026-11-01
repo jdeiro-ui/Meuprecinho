@@ -40,12 +40,14 @@ async def product_add(request: Request, db: DB, background: BackgroundTasks, url
     if not link or "." not in host_of(link):
         flash(request, "Cole o link completo do produto (começando com https://)", "err")
         return back("/products")
+    original = link if linking.needs_resolving(link) else None
     link = (await linking.resolve(link)).split("#")[0]  # links curtos e páginas de afiliado
     if db.scalar(select(Product).where(Product.url == link)):
         flash(request, "Esse produto já está na lista", "err")
         return back("/products")
     store = linking.store_for(db, link)
-    p = Product(store=store, url=link, name=name.strip() or None, target_cents=parse_brl(target))
+    p = Product(store=store, url=link, source_url=original, name=name.strip() or None,
+                target_cents=parse_brl(target))
     db.add(p)
     db.commit()
     if store.fetch_via == "home":

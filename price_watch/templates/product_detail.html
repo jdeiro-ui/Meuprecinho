@@ -27,7 +27,7 @@
   <div class="chart-scale"><small>{{ chart.lo|brl }}</small><small>{{ chart.hi|brl }}</small></div>
   {% endif %}
   <div class="row-actions">
-    <a href="{{ p.url }}" target="_blank" rel="noopener" class="btn primary">{{ icon('external', 18) }} Ver na loja</a>
+    <a href="{{ p.source_url or p.url }}" target="_blank" rel="noopener" class="btn primary">{{ icon('external', 18) }} Ver na loja</a>
     <form method="post" action="/products/{{ p.id }}/check"><button class="btn soft">{{ icon('refresh', 18) }} Consultar</button></form>
   </div>
 </section>
