@@ -58,7 +58,7 @@ async def fix_short_link(product_id: int) -> None:
     """Produto cadastrado com link curto: troca pelo endereço real e pela loja certa."""
     with SessionLocal() as db:
         p = db.get(Product, product_id)
-        if p is None or not linking.is_short(p.url):
+        if p is None or not linking.needs_resolving(p.url):
             return
         short = p.url
     final = await linking.resolve(short)
@@ -67,13 +67,15 @@ async def fix_short_link(product_id: int) -> None:
     with SessionLocal() as db:
         p = db.get(Product, product_id)
         if db.scalar(select(Product).where(Product.url == final, Product.id != product_id)):
-            return  # o mesmo produto já existe com o link real
+            p.last_error = "produto repetido: ele já está na sua lista (pode remover este)"
+            db.commit()
+            return
         old_store = p.store
         p.url = final
         p.store = linking.store_for(db, final)
         p.last_error = None
         db.flush()
-        if linking.is_short("https://" + old_store.domain) and not old_store.products:
+        if linking.needs_resolving("https://" + old_store.domain) and not old_store.products:
             db.delete(old_store)  # loja criada por engano para o encurtador
         db.commit()
 

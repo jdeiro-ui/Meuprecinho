@@ -1,6 +1,7 @@
 """Links de produto: segue encurtadores (meli.la, amzn.to...) e escolhe a loja."""
 
 import re
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy import select
@@ -17,6 +18,10 @@ SHORTENERS = {
     "encurtador.com.br", "abre.ai", "onelink.to", "magalu.lu", "s.click.aliexpress.com",
 }
 _META_REFRESH = re.compile(r"""url=['"]?([^'" >]+)""", re.I)
+# Página "social" do afiliado do Mercado Livre (destino do meli.la): o produto
+# compartilhado vem no estado da página, ex.: "shared_item":{"id":"MLB123","type":"ITEM"}
+_ML_SHARED = re.compile(r'"shared_item"\s*:\s*\{\s*"id"\s*:\s*"(MLB[A-Z]?\d+)"\s*,\s*"type"\s*:\s*"(\w+)"')
+MAX_BODY = 3 << 20
 
 transport: httpx.AsyncBaseTransport | None = None  # para testes
 
@@ -25,18 +30,50 @@ def is_short(url: str) -> bool:
     return host_of(url) in SHORTENERS
 
 
+def is_ml_social(url: str) -> bool:
+    host = host_of(url)
+    return (host == "mercadolivre.com.br" or host.endswith(".mercadolivre.com.br")) \
+        and urlsplit(url).path.startswith("/social/")
+
+
+def needs_resolving(url: str) -> bool:
+    return is_short(url) or is_ml_social(url)
+
+
+def ml_canonical(ml_id: str, kind: str) -> str:
+    if kind.upper() == "PRODUCT":
+        return f"https://www.mercadolivre.com.br/p/{ml_id}"
+    if ml_id.startswith("MLBU"):
+        return f"https://www.mercadolivre.com.br/up/{ml_id}"
+    return f"https://produto.mercadolivre.com.br/MLB-{ml_id[3:]}"
+
+
+async def _read(r: httpx.Response) -> str:
+    chunks, size = [], 0
+    async for chunk in r.aiter_bytes():
+        chunks.append(chunk)
+        size += len(chunk)
+        if size > MAX_BODY:
+            break
+    return b"".join(chunks).decode("utf-8", "replace")
+
+
 async def resolve(url: str) -> str:
-    """Endereço final de um link curto (ou o próprio link, se falhar)."""
-    if not is_short(url):
+    """Endereço real do produto: segue links curtos e, na página social de afiliado
+    do Mercado Livre, pega o produto compartilhado. Se falhar, devolve o próprio link."""
+    if not needs_resolving(url):
         return url
     try:
-        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15,
+        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=20,
                                      transport=transport) as c:
             async with c.stream("GET", url) as r:
                 final = str(r.url)
+                if is_ml_social(final):
+                    if m := _ML_SHARED.search(await _read(r)):
+                        return ml_canonical(m.group(1), m.group(2))
+                    return url
                 if final == url or is_short(final):  # alguns usam redirecionamento por HTML
-                    body = (await r.aread())[:20000].decode("utf-8", "replace")
-                    if m := _META_REFRESH.search(body):
+                    if m := _META_REFRESH.search((await _read(r))[:20000]):
                         final = m.group(1)
     except httpx.HTTPError:
         return url

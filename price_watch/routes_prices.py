@@ -40,7 +40,7 @@ async def product_add(request: Request, db: DB, background: BackgroundTasks, url
     if not link or "." not in host_of(link):
         flash(request, "Cole o link completo do produto (começando com https://)", "err")
         return back("/products")
-    link = (await linking.resolve(link)).split("#")[0]  # segue links curtos (meli.la, amzn.to...)
+    link = (await linking.resolve(link)).split("#")[0]  # links curtos e páginas de afiliado
     if db.scalar(select(Product).where(Product.url == link)):
         flash(request, "Esse produto já está na lista", "err")
         return back("/products")
