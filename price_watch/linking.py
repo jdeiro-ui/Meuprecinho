@@ -96,3 +96,29 @@ def store_for(db, url: str) -> Store:
     db.add(store)
     db.flush()
     return store
+
+
+def ml_social_offer(html: str) -> dict | None:
+    """Na página social de afiliado, dados do produto compartilhado:
+    {"id", "price" (centavos), "name", "image"}; None se não achar."""
+    from .pricing import parse_brl
+
+    m = _ML_SHARED.search(html)
+    if not m:
+        return None
+    ml_id = m.group(1)
+    out = {"id": ml_id, "price": None, "name": None, "image": None}
+    card = html.find(f'"metadata":{{"id":"{ml_id}"')
+    if card >= 0:
+        seg = html[card:card + 8000]
+        if p := re.search(r'"current_price"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)', seg):
+            out["price"] = parse_brl(float(p.group(1)))
+    for prop, key in (("og:title", "name"), ("og:image", "image")):
+        if t := re.search(rf'<meta[^>]+property="{prop}"[^>]+content="([^"]+)"', html):
+            out[key] = t.group(1)
+    if out["name"]:
+        name, sep, price = out["name"].rpartition(" - R$")
+        if sep:
+            out["name"] = name.strip()
+            out["price"] = out["price"] or parse_brl(price)
+    return out

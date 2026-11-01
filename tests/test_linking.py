@@ -82,3 +82,14 @@ def test_produto_gravado_com_pagina_social_e_corrigido_e_repetido_avisa():
     with SessionLocal() as db:
         assert db.get(Product, aid).url == "https://produto.mercadolivre.com.br/MLB-4232914111"
         assert "repetido" in db.get(Product, bid).last_error
+
+
+def test_dados_do_produto_na_pagina_social():
+    html = ('<meta property="og:title" content="Camiseta Tech Light - R$ 79,90">'
+            '<meta property="og:image" content="https://img/c.webp">'
+            '"polycards":[{"metadata":{"id":"MLB111222333"},"price":{"current_price":{"value":10}}},'
+            '{"metadata":{"id":"MLB4232914111"},"components":[{"price":{"current_price":{"value":79.9,"currency":"BRL"}}}]}]'
+            '"shared_item":{"id":"MLB4232914111","type":"ITEM"}')
+    o = linking.ml_social_offer(html)
+    assert o == {"id": "MLB4232914111", "price": 7990, "name": "Camiseta Tech Light", "image": "https://img/c.webp"}
+    assert linking.ml_social_offer("<html>nada</html>") is None
