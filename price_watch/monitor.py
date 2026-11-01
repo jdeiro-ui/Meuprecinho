@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from . import fetcher, mercadolivre, notifier
+from . import fetcher, linking, mercadolivre, notifier
 from .db import SessionLocal
 from .models import Alert, PricePoint, Product, utcnow
 from .pricing import extract, format_brl, host_of, should_notify
@@ -54,13 +54,41 @@ async def check_due() -> None:
             await check_product(pid)
 
 
+async def fix_short_link(product_id: int) -> None:
+    """Produto cadastrado com link curto: troca pelo endereço real e pela loja certa."""
+    with SessionLocal() as db:
+        p = db.get(Product, product_id)
+        if p is None or not linking.is_short(p.url):
+            return
+        short = p.url
+    final = await linking.resolve(short)
+    if final == short:
+        return
+    with SessionLocal() as db:
+        p = db.get(Product, product_id)
+        if db.scalar(select(Product).where(Product.url == final, Product.id != product_id)):
+            return  # o mesmo produto já existe com o link real
+        old_store = p.store
+        p.url = final
+        p.store = linking.store_for(db, final)
+        p.last_error = None
+        db.flush()
+        if linking.is_short("https://" + old_store.domain) and not old_store.products:
+            db.delete(old_store)  # loja criada por engano para o encurtador
+        db.commit()
+
+
 async def check_product(product_id: int) -> None:
     """Baixa a página pelo próprio servidor e processa."""
+    await fix_short_link(product_id)
     with SessionLocal() as db:
         p = db.get(Product, product_id)
         if p is None:
             return
         url, mode, via = p.url, p.store.read_mode, p.store.fetch_via
+    if via == "home":  # virou loja do coletor depois de seguir o link curto
+        request_now(product_id)
+        return
 
     if via == "api":  # API oficial (Mercado Livre): dados prontos, sem baixar página
         try:

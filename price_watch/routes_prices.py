@@ -6,9 +6,9 @@ from urllib.parse import quote, urlsplit
 from fastapi import APIRouter, BackgroundTasks, Form, Request
 from sqlalchemy import select
 
-from . import monitor
+from . import linking, monitor
 from .models import PricePoint, Product, Store, utcnow
-from .pricing import find_url, host_of, match_store, parse_brl
+from .pricing import find_url, host_of, parse_brl
 from .stores_catalog import BY_DOMAIN, CATALOG
 from .web import DB, Auth, back, flash, render
 
@@ -33,35 +33,18 @@ def share_target(title: str = "", text: str = "", url: str = ""):
     return back(f"/products?url={quote(link, safe='')}#novo")
 
 
-def _store_for(db, url: str) -> Store:
-    host = host_of(url)
-    stores = db.scalars(select(Store)).all()
-    domain = match_store(host, [s.domain for s in stores])
-    if domain:
-        return next(s for s in stores if s.domain == domain)
-    known = match_store(host, list(BY_DOMAIN))
-    if known:
-        c = BY_DOMAIN[known]
-        store = Store(name=c["name"], domain=known, read_mode=c["read_mode"], fetch_via=c["via"])
-    else:  # loja desconhecida: cria com o domínio como nome
-        store = Store(name=host.split(".")[0].capitalize(), domain=host)
-    db.add(store)
-    db.flush()
-    return store
-
-
 @router.post("/products")
-def product_add(request: Request, db: DB, background: BackgroundTasks, url: str = Form(),
-                target: str = Form(""), name: str = Form("")):
+async def product_add(request: Request, db: DB, background: BackgroundTasks, url: str = Form(),
+                      target: str = Form(""), name: str = Form("")):
     link = find_url(url)
     if not link or "." not in host_of(link):
         flash(request, "Cole o link completo do produto (começando com https://)", "err")
         return back("/products")
-    link = link.split("#")[0]
+    link = (await linking.resolve(link)).split("#")[0]  # segue links curtos (meli.la, amzn.to...)
     if db.scalar(select(Product).where(Product.url == link)):
         flash(request, "Esse produto já está na lista", "err")
         return back("/products")
-    store = _store_for(db, link)
+    store = linking.store_for(db, link)
     p = Product(store=store, url=link, name=name.strip() or None, target_cents=parse_brl(target))
     db.add(p)
     db.commit()
