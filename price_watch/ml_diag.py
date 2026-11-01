@@ -25,10 +25,25 @@ async def main(ml_id: str) -> None:
         "/products/search?status=active&site_id=MLB&q=camiseta&limit=1",
     ]
     async with mercadolivre._client() as c:
+        catalog = None
         for path in paths:
             r = await c.get(path, headers={"Authorization": f"Bearer {token}"})
             why = mercadolivre._why(r) if r.status_code != 200 else "ok"
+            if r.status_code == 200 and path.startswith("/items?ids="):
+                entry = (r.json() or [{}])[0]
+                body = entry.get("body") or {}
+                why = f"anúncio: código {entry.get('code')}"
+                if entry.get("code") == 200:
+                    catalog = body.get("catalog_product_id")
+                    why += f" | preço {body.get('price')} | catálogo {catalog}"
+                else:
+                    why += f" | {body.get('error') or body.get('message') or ''}"
             print(f"{r.status_code}  {path.split('?')[0]:42} {why}")
+        if catalog:
+            for path in (f"/products/{catalog}", f"/products/{catalog}/items"):
+                r = await c.get(path, headers={"Authorization": f"Bearer {token}"})
+                why = mercadolivre._why(r) if r.status_code != 200 else "ok"
+                print(f"{r.status_code}  {path:42} {why}")
 
 
 if __name__ == "__main__":
