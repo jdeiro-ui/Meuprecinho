@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from telethon import TelegramClient, events
 from telethon.errors import (
+    ApiIdInvalidError,
     FloodWaitError,
     PasswordHashInvalidError,
     PhoneCodeExpiredError,
@@ -111,6 +112,9 @@ class TelegramManager:
         await self.ensure_connected()
         try:
             sent = await self.client.send_code_request(phone)
+        except ApiIdInvalidError:
+            raise PairingError("API_ID/API_HASH inválidos: confira em my.telegram.org, "
+                               "corrija o .env e reinicie o serviço")
         except PhoneNumberInvalidError:
             raise PairingError("Número inválido. Use o formato +5511999999999")
         except FloodWaitError as e:
