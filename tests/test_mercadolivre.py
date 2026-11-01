@@ -145,3 +145,28 @@ def test_monitor_usa_a_api_para_lojas_api(ml, monkeypatch):
         p = db.get(Product, pid)
         assert p.current_cents == 19990 and p.last_error is None
     assert len(sent) == 1
+
+
+def test_erro_de_autorizacao_mostra_motivo_e_tenta_sem_pkce(ml, monkeypatch):
+    seen = []
+
+    def handler(request):
+        form = parse_qs(request.content.decode())
+        seen.append("code_verifier" in form)
+        if request.url.path == "/oauth/token" and "code_verifier" in form:
+            return httpx.Response(400, json={"error": "invalid_grant", "message": "code_verifier inválido"})
+        if request.url.path == "/oauth/token":
+            return httpx.Response(200, json={"access_token": "AT1", "refresh_token": "RT1", "expires_in": 21600})
+        return httpx.Response(200, json={"nickname": "SEMPKCE"})
+
+    monkeypatch.setattr(mercadolivre, "transport", httpx.MockTransport(handler))
+    asyncio.run(mercadolivre.exchange_code("abc", "https://x/ml/callback", "verif"))
+    assert seen[:2] == [True, False] and mercadolivre.account() == "SEMPKCE"
+
+    def always_bad(request):
+        return httpx.Response(400, json={"error": "invalid_client", "message": "segredo errado: segredo"})
+
+    monkeypatch.setattr(mercadolivre, "transport", httpx.MockTransport(always_bad))
+    with pytest.raises(FetchError) as exc:
+        asyncio.run(mercadolivre.exchange_code("abc", "https://x/ml/callback", "verif"))
+    assert "invalid_client" in str(exc.value) and "segredo errado: ***" in str(exc.value)

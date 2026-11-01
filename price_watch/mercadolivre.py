@@ -28,7 +28,7 @@ transport: httpx.AsyncBaseTransport | None = None
 
 def configured() -> bool:
     s = get_settings()
-    return bool(s.ML_CLIENT_ID and s.ML_CLIENT_SECRET)
+    return bool(s.ML_CLIENT_ID.strip() and s.ML_CLIENT_SECRET.strip())
 
 
 # ---------- identificação do produto pelo link ----------
@@ -88,7 +88,7 @@ def new_pkce() -> tuple[str, str]:
 
 def authorize_url(redirect_uri: str, state: str, challenge: str) -> str:
     return AUTH_URL + "?" + urlencode({
-        "response_type": "code", "client_id": get_settings().ML_CLIENT_ID, "redirect_uri": redirect_uri,
+        "response_type": "code", "client_id": get_settings().ML_CLIENT_ID.strip(), "redirect_uri": redirect_uri,
         "state": state, "code_challenge": challenge, "code_challenge_method": "S256",
     })
 
@@ -98,14 +98,34 @@ def _client() -> httpx.AsyncClient:
                              headers={"Accept": "application/json"})
 
 
+class AuthError(FetchError):
+    def __init__(self, status: int, code: str, detail: str):
+        self.status, self.code = status, code
+        why = f"{code}: {detail}" if detail else code
+        super().__init__(f"o Mercado Livre recusou a autorização (HTTP {status}, {why})")
+
+
+def _auth_error(r: httpx.Response) -> AuthError:
+    try:
+        body = r.json()
+    except ValueError:
+        body = {}
+    secret = get_settings().ML_CLIENT_SECRET
+    # "error"/"message" explicam o motivo (ex.: invalid_grant); nunca ecoamos o segredo
+    code = str(body.get("error") or "erro")[:40]
+    detail = str(body.get("message") or body.get("error_description") or "")[:160]
+    if secret:
+        detail = detail.replace(secret, "***")
+    return AuthError(r.status_code, code, detail)
+
+
 async def _token_request(data: dict) -> None:
     s = get_settings()
-    data |= {"client_id": s.ML_CLIENT_ID, "client_secret": s.ML_CLIENT_SECRET}
+    data = data | {"client_id": s.ML_CLIENT_ID.strip(), "client_secret": s.ML_CLIENT_SECRET.strip()}
     async with _client() as c:
         r = await c.post("/oauth/token", data=data)
         if r.status_code != 200:
-            # Só o código: a resposta não traz dados pessoais, mas evitamos ecoar segredos
-            raise FetchError(f"o Mercado Livre recusou a autorização (HTTP {r.status_code})")
+            raise _auth_error(r)
         tok = r.json()
         values = {"ml_access_token": tok["access_token"],
                   "ml_expires_at": int(time.time()) + int(tok.get("expires_in", 21600)) - 120}
@@ -118,8 +138,14 @@ async def _token_request(data: dict) -> None:
 
 
 async def exchange_code(code: str, redirect_uri: str, verifier: str) -> None:
-    await _token_request({"grant_type": "authorization_code", "code": code,
-                          "redirect_uri": redirect_uri, "code_verifier": verifier})
+    data = {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri}
+    try:
+        await _token_request(data | {"code_verifier": verifier})
+    except AuthError as e:
+        if e.status != 400:
+            raise
+        # App sem PKCE ativado pode recusar o code_verifier: tenta sem ele
+        await _token_request(data)
 
 
 async def _access_token() -> str:
