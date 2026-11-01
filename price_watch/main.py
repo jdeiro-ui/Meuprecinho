@@ -141,7 +141,9 @@ def logout(request: Request):
 
 @app.get("/manifest.webmanifest")
 def manifest():
-    return FileResponse(BASE / "static/manifest.webmanifest", media_type="application/manifest+json")
+    # Sem cache, para nome e ícone novos chegarem logo ao Android
+    return FileResponse(BASE / "static/manifest.webmanifest", media_type="application/manifest+json",
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/sw.js")
