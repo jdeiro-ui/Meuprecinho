@@ -1,26 +1,31 @@
 {% extends "base.html" %}
 {% block heading %}Regras{% endblock %}
+{% block subtitle %}<p class="sub">Palavras que disparam um aviso</p>{% endblock %}
 {% block content %}
-<details class="card" {{ 'open' if edit or not rules }}>
-  <summary>{{ 'Editar regra' if edit else 'Nova regra' }}</summary>
+<details class="card form-card" {{ 'open' if edit or not rules }}>
+  <summary>{{ icon('edit' if edit else 'plus', 20) }} {{ 'Editar regra' if edit else 'Nova regra' }}</summary>
   <form method="post" action="/rules{{ '/%d' % edit.id if edit }}">
     <label>Palavra ou frase <input name="keyword" value="{{ edit.keyword if edit }}" placeholder="air fryer" required></label>
-    <p class="hint">Sem diferença de maiúsculas/acentos. Termine com * para prefixo (ex.: <code>notebook*</code>).</p>
-    <label>Exclusões (separadas por vírgula)
-      <input name="exclusions" value="{{ edit.exclusions if edit }}" placeholder="usado, defeito"></label>
+    <p class="hint">Maiúsculas e acentos não importam. Termine com * para prefixo (ex.: <code>notebook*</code>).</p>
+    <label>Exclusões <input name="exclusions" value="{{ edit.exclusions if edit }}" placeholder="usado, defeito"></label>
+    <p class="hint">Separadas por vírgula. Se aparecerem na mensagem, não avisa.</p>
     <fieldset>
-      <legend>Grupos (nenhum marcado = todos os monitorados)</legend>
+      <legend>Grupos <small>(nenhum = todos os monitorados)</small></legend>
       {% set sel = edit.groups|map(attribute='id')|list if edit else [] %}
+      <div class="pick">
       {% for g in groups %}
-      <label class="check"><input type="checkbox" name="group_ids" value="{{ g.id }}" {{ 'checked' if g.id in sel }}> {{ g.title }}</label>
+        <label class="pill-check"><input type="checkbox" name="group_ids" value="{{ g.id }}" {{ 'checked' if g.id in sel }}><span>{{ g.title }}</span></label>
       {% else %}<p class="hint">Nenhum grupo monitorado ainda.</p>{% endfor %}
+      </div>
     </fieldset>
-    <label class="check"><input type="checkbox" name="active" {{ 'checked' if not edit or edit.active }}> Ativa</label>
-    <button>Salvar</button>
-    {% if edit %}<a href="/rules" class="button secondary">Cancelar</a>{% endif %}
+    <label class="check"><input type="checkbox" name="active" {{ 'checked' if not edit or edit.active }}> Regra ativa</label>
+    <div class="row-actions">
+      <button class="btn primary">Salvar</button>
+      {% if edit %}<a href="/rules" class="btn ghost">Cancelar</a>{% endif %}
+    </div>
   </form>
 </details>
 {% for r in rules %}{% include "_rule_row.html" %}{% else %}
-<p class="empty">Nenhuma regra.</p>
+<div class="empty">{{ icon('search', 40) }}<p>Nenhuma regra ainda.</p></div>
 {% endfor %}
 {% endblock %}

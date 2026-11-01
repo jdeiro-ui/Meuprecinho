@@ -1,40 +1,49 @@
 {% extends "base.html" %}
-{% block heading %}Conta do Telegram{% endblock %}
+{% block heading %}Conta{% endblock %}
+{% block subtitle %}<p class="sub">Telegram e sessão do painel</p>{% endblock %}
 {% block content %}
 {% if not configured %}
-<p class="flash err">Defina API_ID e API_HASH no .env e reinicie o app.</p>
+<div class="toast err">{{ icon('alert', 20) }}<span>Defina API_ID e API_HASH no .env e reinicie o app.</span></div>
 {% elif tg.authorized %}
-<section class="card">
-  <p>Pareado como <strong>{{ tg.me_name }}</strong> ·
-     {{ 'conectado' if tg.connected else 'reconectando…' }}</p>
-  <form method="post" action="/telegram/logout" onsubmit="return confirm('Desconectar a conta? A sessão será apagada.')">
-    <button class="danger">Desparear</button>
-  </form>
+<section class="card item">
+  <span class="avatar big">{{ tg.me_name[:1]|upper }}</span>
+  <div class="grow">
+    <strong>{{ tg.me_name }}</strong>
+    <small><span class="status inline {{ 'on' if tg.connected else 'off' }}"><span class="dot"></span>{{ 'conectado' if tg.connected else 'reconectando…' }}</span></small>
+  </div>
 </section>
+<form method="post" action="/telegram/logout" class="actions" onsubmit="return confirm('Desconectar a conta? A sessão será apagada.')">
+  <button class="btn ghost danger-text">Desparear Telegram</button>
+</form>
 {% elif tg.awaiting == 'code' %}
 <section class="card">
-  <p>Digite o código enviado pelo Telegram (no app ou por SMS).</p>
+  <h2>Digite o código</h2>
+  <p class="hint">O Telegram enviou um código no app (ou por SMS).</p>
   <form method="post" action="/telegram/code">
-    <label>Código <input name="code" inputmode="numeric" autocomplete="one-time-code" required autofocus></label>
-    <button>Confirmar</button>
+    <label>Código <input name="code" inputmode="numeric" autocomplete="one-time-code" required autofocus class="code-input"></label>
+    <button class="btn primary block">Confirmar</button>
   </form>
 </section>
 {% elif tg.awaiting == 'password' %}
 <section class="card">
-  <p>Sua conta tem verificação em duas etapas.</p>
+  <h2>Verificação em duas etapas</h2>
+  <p class="hint">Digite a senha 2FA da sua conta do Telegram.</p>
   <form method="post" action="/telegram/password">
     <label>Senha 2FA <input name="password" type="password" autocomplete="off" required autofocus></label>
-    <button>Entrar</button>
+    <button class="btn primary block">Entrar</button>
   </form>
 </section>
 {% else %}
 <section class="card">
-  <p>Pareie a sua conta para ler os grupos. A sessão fica salva no servidor.</p>
+  <h2>Conectar o Telegram</h2>
+  <p class="hint">Pareie a sua conta para ler os grupos. A sessão fica salva no servidor.</p>
   <form method="post" action="/telegram/phone">
     <label>Telefone <input name="phone" type="tel" placeholder="+55 11 99999-9999" autocomplete="tel" required></label>
-    <button>Enviar código</button>
+    <button class="btn primary block">Enviar código</button>
   </form>
 </section>
 {% endif %}
-<form method="post" action="/logout" class="inline"><button class="secondary">Sair do painel</button></form>
+<form method="post" action="/logout" class="actions">
+  <button class="btn soft">{{ icon('logout', 18) }} Sair do painel</button>
+</form>
 {% endblock %}

@@ -1,12 +1,15 @@
 {% extends "base.html" %}
+{% block body_class %}login-page{% endblock %}
 {% block content %}
-<section class="card login">
-  <h1>price-watch</h1>
-  {% if error %}<p class="flash err">{{ error }}</p>{% endif %}
-  <form method="post" action="/login">
+<section class="login">
+  <img src="/static/icons/icon-512.png" alt="" class="login-logo" width="112" height="112">
+  <h1>MeuPrecinho</h1>
+  <p class="tagline">Promoções do Telegram e preços das suas lojas</p>
+  <form method="post" action="/login" class="card">
+    {% if error %}<div class="toast err">{{ error }}</div>{% endif %}
     <label>Usuário <input name="username" autocomplete="username" autocapitalize="none" required></label>
     <label>Senha <input name="password" type="password" autocomplete="current-password" required></label>
-    <button>Entrar</button>
+    <button class="btn primary block">Entrar</button>
   </form>
 </section>
 {% endblock %}

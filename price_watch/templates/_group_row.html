@@ -1,7 +1,9 @@
-<article class="card row" id="g{{ g.id }}">
+{% from "_icons.html" import icon %}
+<article class="card item {{ 'on' if g.monitored }}" id="g{{ g.id }}">
+  <span class="avatar">{{ g.title[:1]|upper }}</span>
   <div class="grow">
     <strong>{{ g.title }}</strong>
-    <small>{{ {'group': 'grupo', 'supergroup': 'supergrupo', 'channel': 'canal'}[g.kind] }}{% if g.username %} · @{{ g.username }}{% endif %}</small>
+    <small>{{ {'group': 'Grupo', 'supergroup': 'Supergrupo', 'channel': 'Canal'}[g.kind] }}{% if g.username %} · @{{ g.username }}{% endif %}</small>
   </div>
   <button class="switch {{ 'on' if g.monitored }}" role="switch" aria-checked="{{ 'true' if g.monitored else 'false' }}"
           hx-post="/groups/{{ g.id }}/toggle" hx-target="#g{{ g.id }}" hx-swap="outerHTML"

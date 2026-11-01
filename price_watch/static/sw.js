@@ -1,6 +1,6 @@
 // Service worker mínimo: cacheia só arquivos estáticos; páginas vêm sempre da rede
 // (dados pessoais não ficam em cache).
-const CACHE = "pw-static-v2";
+const CACHE = "pw-static-v3";
 const ASSETS = ["/static/style.css", "/static/htmx.min.js", "/static/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -23,7 +23,7 @@ self.addEventListener("fetch", (e) => {
   } else if (e.request.mode === "navigate") {
     e.respondWith(
       fetch(e.request).catch(
-        () => new Response("<meta name=viewport content='width=device-width'><p style='font-family:sans-serif;padding:2rem'>Sem conexão com o price-watch.</p>",
+        () => new Response("<meta name=viewport content='width=device-width'><p style='font-family:sans-serif;padding:2rem'>Sem conexão com o MeuPrecinho.</p>",
                            { headers: { "Content-Type": "text/html; charset=utf-8" } })
       )
     );

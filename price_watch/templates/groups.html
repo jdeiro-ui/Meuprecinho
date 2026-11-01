@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 {% block heading %}Grupos{% endblock %}
+{% block subtitle %}<p class="sub">Só os grupos com a chave ligada são lidos</p>{% endblock %}
 {% block content %}
 {% if not tg.authorized %}
-<p class="flash err">Pareie sua conta do Telegram na aba <a href="/telegram">Conta</a> primeiro.</p>
+<div class="toast err">{{ icon('alert', 20) }}<span>Pareie sua conta do Telegram na aba <a href="/telegram">Conta</a> primeiro.</span></div>
 {% else %}
-<form method="post" action="/groups/refresh" class="inline"><button class="secondary">Atualizar lista do Telegram</button></form>
+<form method="post" action="/groups/refresh" class="actions">
+  <button class="btn soft">{{ icon('refresh', 18) }} Atualizar lista do Telegram</button>
+</form>
 {% endif %}
-<p class="hint">Só os grupos com a chave ligada são lidos.</p>
 {% for g in groups %}{% include "_group_row.html" %}{% else %}
-<p class="empty">Nenhum grupo carregado.</p>
+<div class="empty">{{ icon('users', 40) }}<p>Nenhum grupo carregado.</p></div>
 {% endfor %}
 {% endblock %}

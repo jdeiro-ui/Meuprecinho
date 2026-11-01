@@ -61,7 +61,7 @@ class TelegramManager:
             # Poucas tentativas por vez; o watchdog do scheduler reconecta depois
             connection_retries=5,
             retry_delay=5,
-            device_model="price-watch",
+            device_model="MeuPrecinho",
         )
         client.add_event_handler(self._on_message, events.NewMessage(incoming=True))
         return client

@@ -171,7 +171,7 @@ def alerts(request: Request, db: DB):
 
 @app.post("/alerts/test", dependencies=[Auth])
 async def alerts_test(request: Request):
-    ok = await notifier.send("✅ price-watch: teste de aviso")
+    ok = await notifier.send("✅ MeuPrecinho: teste de aviso")
     if ok:
         flash(request, "Mensagem de teste enviada")
     else:

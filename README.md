@@ -1,4 +1,6 @@
-# price-watch
+# MeuPrecinho
+
+(código e pacote Python: `price_watch`)
 
 Web app pessoal (PWA, mobile-first) que:
 

@@ -1,36 +1,43 @@
+{% from "_icons.html" import icon %}
 <!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f766e">
-  <title>{% block title %}price-watch{% endblock %}</title>
+  <meta name="theme-color" content="#4f35d8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1d1550" media="(prefers-color-scheme: dark)">
+  <title>{% block title %}MeuPrecinho{% endblock %}</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js" defer></script>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   {% if request.session.get('uid') %}
-  <header class="top">
-    <h1>{% block heading %}price-watch{% endblock %}</h1>
-    <a class="tg-status {{ 'on' if tg.authorized and tg.connected else 'off' }}" href="/telegram"
-       title="Telegram">{{ 'Telegram on' if tg.authorized and tg.connected else 'Telegram off' }}</a>
+  {% set online = tg.authorized and tg.connected %}
+  <header class="hero">
+    <div class="brand-row">
+      <a href="/alerts" class="brand"><img src="/static/icons/icon-192.png" alt="" width="34" height="34">MeuPrecinho</a>
+      <a class="status {{ 'on' if online else 'off' }}" href="/telegram">
+        <span class="dot"></span>{{ 'Telegram on' if online else 'Telegram off' }}</a>
+    </div>
+    <h1>{% block heading %}{% endblock %}</h1>
+    {% block subtitle %}{% endblock %}
   </header>
   {% endif %}
   <main>
-    {% if flash %}<p class="flash {{ flash.kind }}">{{ flash.msg }}</p>{% endif %}
+    {% if flash %}
+    <div class="toast {{ flash.kind }}" role="status">{{ icon('check' if flash.kind == 'ok' else 'alert', 20) }}<span>{{ flash.msg }}</span></div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
   {% if request.session.get('uid') %}
   {% set p = request.url.path %}
-  <nav class="tabs">
-    <a href="/alerts" class="{{ 'active' if p.startswith('/alerts') }}">🔔<span>Avisos</span></a>
-    <a href="/rules" class="{{ 'active' if p.startswith('/rules') }}">🔑<span>Regras</span></a>
-    <a href="/groups" class="{{ 'active' if p.startswith('/groups') }}">👥<span>Grupos</span></a>
-    <a href="/stores" class="{{ 'active' if p.startswith('/stores') }}">🏬<span>Lojas</span></a>
-    <a href="/telegram" class="{{ 'active' if p.startswith('/telegram') }}">⚙️<span>Conta</span></a>
+  <nav class="dock">
+    {% for href, ico, label in [('/alerts','bell','Avisos'), ('/rules','search','Regras'), ('/groups','users','Grupos'), ('/stores','store','Lojas'), ('/telegram','user','Conta')] %}
+    <a href="{{ href }}" class="{{ 'active' if p.startswith(href) }}">{{ icon(ico) }}<span>{{ label }}</span></a>
+    {% endfor %}
   </nav>
   {% endif %}
   <script>

@@ -1,21 +1,27 @@
 {% extends "base.html" %}
-{% block heading %}Avisos recentes{% endblock %}
+{% block heading %}Avisos{% endblock %}
+{% block subtitle %}<p class="sub">Mensagens que bateram com as suas regras</p>{% endblock %}
 {% block content %}
 {% if not bot_ok %}
-<p class="flash err">BOT_TOKEN/CHAT_ID não configurados: os avisos ficam só aqui.</p>
+<div class="toast err">{{ icon('alert', 20) }}<span>BOT_TOKEN/CHAT_ID não configurados: os avisos ficam só aqui.</span></div>
 {% endif %}
-<form method="post" action="/alerts/test" class="inline"><button class="secondary">Enviar teste ao bot</button></form>
+<form method="post" action="/alerts/test" class="actions">
+  <button class="btn soft">{{ icon('send', 18) }} Enviar teste ao bot</button>
+</form>
 {% for a in alerts %}
-<article class="card alert">
+<article class="card alert-card">
   <header>
-    <strong>{{ a.group_title }}</strong>
+    <strong class="title">{{ a.group_title }}</strong>
     <time>{{ a.created_at.astimezone().strftime('%d/%m %H:%M') }}</time>
   </header>
-  <p class="kw">{{ a.keywords }}{% if not a.delivered %} · <span class="bad">não entregue</span>{% endif %}</p>
+  <div class="chips">
+    {% for k in a.keywords.split(', ') %}<span class="chip hot">{{ k }}</span>{% endfor %}
+    {% if not a.delivered %}<span class="chip bad">não entregue</span>{% endif %}
+  </div>
   <p class="snippet">{{ a.snippet }}</p>
-  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener">Abrir no Telegram</a>{% endif %}
+  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener" class="btn soft small">{{ icon('external', 16) }} Abrir no Telegram</a>{% endif %}
 </article>
 {% else %}
-<p class="empty">Nenhum aviso ainda.</p>
+<div class="empty">{{ icon('bell', 40) }}<p>Nenhum aviso ainda.</p><small>Quando uma mensagem bater com uma regra, ela aparece aqui e no seu bot.</small></div>
 {% endfor %}
 {% endblock %}

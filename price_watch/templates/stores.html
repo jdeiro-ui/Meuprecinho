@@ -1,37 +1,45 @@
 {% extends "base.html" %}
 {% block heading %}Lojas{% endblock %}
+{% block subtitle %}<p class="sub">Onde os preços serão acompanhados</p>{% endblock %}
 {% block content %}
-<details class="card" {{ 'open' if edit or not stores }}>
-  <summary>{{ 'Editar loja' if edit else 'Nova loja' }}</summary>
+<details class="card form-card" {{ 'open' if edit or not stores }}>
+  <summary>{{ icon('edit' if edit else 'plus', 20) }} {{ 'Editar loja' if edit else 'Nova loja' }}</summary>
   <form method="post" action="/stores{{ '/%d' % edit.id if edit }}">
-    <label>Nome <input name="name" value="{{ edit.name if edit }}" required></label>
+    <label>Nome <input name="name" value="{{ edit.name if edit }}" placeholder="Kabum" required></label>
     <label>Domínio <input name="domain" value="{{ edit.domain if edit }}" placeholder="loja.com.br"
            autocapitalize="none" inputmode="url" required></label>
-    <label>Intervalo (minutos) <input name="interval_minutes" type="number" min="5"
-           value="{{ edit.interval_minutes if edit else 60 }}"></label>
-    <label>Modo de leitura
-      <select name="read_mode">
-        {% for k, v in modes.items() %}
-        <option value="{{ k }}" {{ 'selected' if edit and edit.read_mode == k }}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <button>Salvar</button>
-    {% if edit %}<a href="/stores" class="button secondary">Cancelar</a>{% endif %}
+    <div class="grid2">
+      <label>Intervalo (min) <input name="interval_minutes" type="number" min="5"
+             value="{{ edit.interval_minutes if edit else 60 }}"></label>
+      <label>Leitura
+        <select name="read_mode">
+          {% for k, v in modes.items() %}
+          <option value="{{ k }}" {{ 'selected' if edit and edit.read_mode == k }}>{{ 'Navegador' if k == 'browser' else 'HTTP' }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="hint">HTTP é mais leve. Use "Navegador" para sites que só mostram o preço com JavaScript.</p>
+    <div class="row-actions">
+      <button class="btn primary">Salvar</button>
+      {% if edit %}<a href="/stores" class="btn ghost">Cancelar</a>{% endif %}
+    </div>
   </form>
 </details>
 {% for s in stores %}
-<article class="card row">
+<article class="card item">
+  <span class="avatar">{{ s.name[:1]|upper }}</span>
   <div class="grow">
     <strong>{{ s.name }}</strong>
-    <small>{{ s.domain }} · a cada {{ s.interval_minutes }} min · {{ 'navegador' if s.read_mode == 'browser' else 'HTTP' }}</small>
+    <small>{{ s.domain }}</small>
+    <div class="chips"><span class="chip">a cada {{ s.interval_minutes }} min</span><span class="chip">{{ 'Navegador' if s.read_mode == 'browser' else 'HTTP' }}</span></div>
   </div>
-  <a href="/stores/{{ s.id }}" class="button secondary small">Editar</a>
+  <a href="/stores/{{ s.id }}" class="icon-btn" aria-label="Editar {{ s.name }}">{{ icon('edit', 18) }}</a>
   <form method="post" action="/stores/{{ s.id }}/delete" onsubmit="return confirm('Remover {{ s.name|e }}?')">
-    <button class="danger small">✕</button>
+    <button class="icon-btn danger" aria-label="Remover {{ s.name }}">{{ icon('x', 18) }}</button>
   </form>
 </article>
 {% else %}
-<p class="empty">Nenhuma loja cadastrada.</p>
+<div class="empty">{{ icon('store', 40) }}<p>Nenhuma loja cadastrada.</p></div>
 {% endfor %}
 {% endblock %}
