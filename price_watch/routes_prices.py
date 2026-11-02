@@ -1,13 +1,16 @@
 """Telas de Produtos e Lojas (monitoramento de preços)."""
 
+import asyncio
+
 from datetime import timedelta
 from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Form, Request
 from sqlalchemy import select
 
-from . import affiliate, linking, monitor
-from .models import Item, PricePoint, Product, Store, utcnow
+from . import affiliate, item_rules, linking, monitor
+from .telegram import manager
+from .models import Item, PricePoint, Product, Rule, Store, utcnow
 from .pricing import find_url, host_of, parse_brl
 from .stores_catalog import BY_DOMAIN, CATALOG
 from .web import DB, Auth, back, flash, render
@@ -64,7 +67,11 @@ async def product_add(request: Request, db: DB, background: BackgroundTasks, url
     item = Item(name=name.strip() or None, target_cents=parse_brl(target))
     offer = Product(item=item, store=store, url=link, source_url=original)
     db.add_all([item, offer])
+    db.flush()
+    rules_changed = item_rules.sync(db, item)  # sem nome ainda: a regra nasce na 1ª leitura
     db.commit()
+    if rules_changed:
+        await asyncio.to_thread(manager.reload)
     _start_reading(background, offer)
     flash(request, f"Produto adicionado ({store.name}). Consultando o preço…")
     return back("/products")
@@ -126,13 +133,14 @@ def product_detail(request: Request, db: DB, item_id: int):
                         .order_by(PricePoint.checked_at)).all() if ids else []
     offers = sorted(item.offers, key=lambda o: (o.current_cents is None or bool(o.last_error)
                                                 or o.available is False, o.current_cents or 0))
-    return render(request, "product_detail.html", item=item, offers=offers, best=item.best_offer(),
+    rule = db.scalar(select(Rule).where(Rule.item_id == item.id))
+    return render(request, "product_detail.html", item=item, offers=offers, best=item.best_offer(), rule=rule,
                   points=list(reversed(points[-30:])), chart=_chart(_best_series(points)))
 
 
 @router.post("/products/{item_id}")
-def product_save(request: Request, db: DB, item_id: int, name: str = Form(""), target: str = Form(""),
-                 active: bool = Form(False)):
+async def product_save(request: Request, db: DB, item_id: int, name: str = Form(""), target: str = Form(""),
+                       active: bool = Form(False), watch_telegram: bool = Form(False)):
     item = db.get(Item, item_id)
     if item is None:
         return back("/products")
@@ -142,9 +150,13 @@ def product_save(request: Request, db: DB, item_id: int, name: str = Form(""), t
         item.last_notified_cents = None  # alvo novo: volta a avisar
     item.target_cents = new_target
     item.active = active
+    item.watch_telegram = watch_telegram
     for offer in item.offers:
         offer.active = active
+    rules_changed = item_rules.sync(db, item)
     db.commit()
+    if rules_changed:
+        await asyncio.to_thread(manager.reload)
     flash(request, "Produto salvo")
     return back(f"/products/{item_id}")
 
@@ -166,10 +178,11 @@ async def product_check(request: Request, db: DB, item_id: int):
 
 
 @router.post("/products/{item_id}/delete")
-def product_delete(request: Request, db: DB, item_id: int):
+async def product_delete(request: Request, db: DB, item_id: int):
     if item := db.get(Item, item_id):
-        db.delete(item)
+        db.delete(item)  # a regra do Telegram do produto vai junto (ON DELETE CASCADE)
         db.commit()
+        await asyncio.to_thread(manager.reload)
         flash(request, "Produto removido")
     return back("/products")
 

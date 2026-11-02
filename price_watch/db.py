@@ -41,6 +41,10 @@ _NEW_COLUMNS = [
     ("products", "source_url", "VARCHAR(2000)", None),
     ("products", "clicks", "INTEGER NOT NULL DEFAULT 0", None),
     ("products", "item_id", "INTEGER REFERENCES items(id) ON DELETE CASCADE", None),
+    ("rules", "item_id", "INTEGER REFERENCES items(id) ON DELETE CASCADE", None),
+    ("rules", "auto", "BOOLEAN NOT NULL DEFAULT 0", None),
+    ("items", "watch_telegram", "BOOLEAN NOT NULL DEFAULT 1", None),
+    ("items", "discovered_at", "DATETIME", None),
 ]
 
 

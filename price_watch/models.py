@@ -42,7 +42,7 @@ class Store(Base):
     price_selector: Mapped[str | None] = mapped_column(String(255))
     # Quem baixa a página: "vm" (o próprio servidor) ou "home" (coletor no celular de casa,
     # com IP residencial, para lojas que bloqueiam servidores na nuvem)
-    fetch_via: Mapped[str] = mapped_column(String(8), default="vm")
+    fetch_via: Mapped[str] = mapped_column(String(8), default="vm", server_default="vm")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     products: Mapped[list["Product"]] = relationship(
         back_populates="store", cascade="all, delete-orphan", passive_deletes=True
@@ -67,6 +67,8 @@ class Item(Base):
     lowest_cents: Mapped[int | None] = mapped_column(Integer)
     last_notified_cents: Mapped[int | None] = mapped_column(Integer)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    watch_telegram: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")  # procurar nos grupos
+    discovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # busca em lojas
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     offers: Mapped[list["Product"]] = relationship(
@@ -100,7 +102,7 @@ class Product(Base):
     last_notified_cents: Mapped[int | None] = mapped_column(Integer)
     available: Mapped[bool | None] = mapped_column(Boolean)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    clicks: Mapped[int] = mapped_column(Integer, default=0)  # cliques em "Comprar"
+    clicks: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # cliques em "Comprar"
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     last_error: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -147,6 +149,10 @@ class Rule(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Sem grupos = vale para todos os grupos monitorados
     groups: Mapped[list[TgGroup]] = relationship(secondary=rule_groups, lazy="selectin")
+    # Regra criada a partir de um produto (busca do produto nos grupos do Telegram)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    auto: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # palavra-chave gerada pelo app
+    item: Mapped[Item | None] = relationship(lazy="joined")
 
 
 class Alert(Base):

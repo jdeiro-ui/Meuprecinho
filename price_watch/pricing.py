@@ -254,6 +254,15 @@ def should_notify(new: int | None, available: bool | None, target: int | None,
 
 # ---------- utilidades ----------
 
+_MSG_PRICE = re.compile(r"R\$\s*(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:,\d{1,2})?)", re.I)
+
+
+def price_in_text(text: str) -> int | None:
+    """Menor preço "R$ ..." citado numa mensagem (promoções costumam trazer "de R$ X
+    por R$ Y"; o menor é o preço da oferta)."""
+    prices = [p for p in (parse_brl(m.group(1)) for m in _MSG_PRICE.finditer(text or "")) if p]
+    return min(prices) if prices else None
+
 _URL = re.compile(r"https?://[^\s<>\"']+")
 
 

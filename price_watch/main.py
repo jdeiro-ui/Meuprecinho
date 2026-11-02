@@ -219,6 +219,8 @@ async def rule_save(request: Request, db: DB, keyword: str = Form(), exclusions:
     rule = db.get(Rule, rule_id) if rule_id else Rule()
     if rule is None:
         return back("/rules")
+    if rule.item_id and keyword != rule.keyword:
+        rule.auto = False  # palavra editada à mão: o app não sobrescreve mais
     rule.keyword = keyword
     rule.exclusions = ", ".join(t.strip() for t in exclusions.split(",") if t.strip())
     rule.active = active

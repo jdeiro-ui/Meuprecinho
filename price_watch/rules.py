@@ -13,6 +13,7 @@ class RuleSpec:
     exclusions: tuple[str, ...] = ()
     group_ids: frozenset[int] = field(default_factory=frozenset)  # vazio = todos
     active: bool = True
+    item_id: int | None = None  # regra de um produto acompanhado
 
 
 def _norm_char(ch: str) -> str:
@@ -59,12 +60,30 @@ def _found(term: str, norm_text: str) -> re.Match[str] | None:
     return term_pattern(term).search(norm_text)
 
 
+def keyword_terms(keyword: str) -> list[str]:
+    """'galaxy + a27 + 256gb' -> ['galaxy', 'a27', '256gb']: todos precisam aparecer, em
+    qualquer ordem. O separador é ' + ' (com espaços), para não quebrar termos como 'c++'."""
+    parts = [t.strip() for t in keyword.split(" + ") if t.strip().rstrip("*").strip()]
+    return parts or [keyword]
+
+
+def _keyword_found(keyword: str, norm_text: str) -> re.Match[str] | None:
+    """Primeira ocorrência se todos os termos aparecem; None se faltar algum."""
+    first = None
+    for term in keyword_terms(keyword):
+        m = _found(term, norm_text)
+        if m is None:
+            return None
+        first = first or m
+    return first
+
+
 def rule_matches(rule: RuleSpec, norm_text: str, chat_id: int) -> bool:
     if not rule.active:
         return False
     if rule.group_ids and chat_id not in rule.group_ids:
         return False
-    if not _found(rule.keyword, norm_text):
+    if not _keyword_found(rule.keyword, norm_text):
         return False
     return not any(_found(ex, norm_text) for ex in rule.exclusions)
 
@@ -83,7 +102,7 @@ def snippet(text: str, keyword: str, width: int = 280) -> str:
     if len(flat) <= width:
         return flat
     norm, index = _normalize_with_map(flat)
-    m = _found(keyword, norm)
+    m = _keyword_found(keyword, norm)
     center = index[m.start()] if m else 0
     start = max(0, min(center - width // 3, len(flat) - width))
     end = start + width

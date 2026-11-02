@@ -6,12 +6,13 @@ para ser processado por process_page()."""
 
 import asyncio
 import logging
+import threading
 import time
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from . import affiliate, fetcher, linking, mercadolivre, notifier
+from . import affiliate, fetcher, item_rules, linking, mercadolivre, notifier
 from .db import SessionLocal
 from .models import Alert, Item, PricePoint, Product, utcnow
 from .pricing import extract, format_brl, host_of, should_notify
@@ -24,6 +25,7 @@ HISTORY_EVERY = timedelta(hours=12)  # grava ponto repetido no máximo a cada 12
 LEASE = timedelta(minutes=10)        # tempo que um produto fica reservado ao coletor
 COLLECTOR_SILENT = timedelta(minutes=60)  # sem contato por mais que isso = aviso no bot
 
+_rules_dirty = threading.Event()
 _lock = asyncio.Lock()  # uma consulta por vez (o Playwright pesa na VM pequena)
 _last_hit: dict[str, float] = {}
 
@@ -201,6 +203,11 @@ async def process_page(product_id: int, html: str | None, error: str | None) -> 
 
 async def _finish(product_id: int, ex, error: str | None) -> None:
     alert = await asyncio.to_thread(_save_result, product_id, ex, error)
+    if _rules_dirty.is_set():  # regra de produto criada/alterada: listener do Telegram recarrega
+        _rules_dirty.clear()
+        from .telegram import manager
+
+        await asyncio.to_thread(manager.reload)
     if alert:
         ok = await notifier.send(notifier.format_price_alert(**alert))
         await asyncio.to_thread(_save_alert, alert, ok)
@@ -247,6 +254,8 @@ def _save_result(product_id: int, ex, error: str | None) -> dict | None:
             item.gtin = item.gtin or getattr(ex, "gtin", None)
             item.brand = item.brand or getattr(ex, "brand", None)
             item.model = item.model or getattr(ex, "model", None)
+            if item_rules.sync(db, item):
+                _rules_dirty.set()
 
         best = item.best_offer()
         item.best_cents = best.current_cents if best else None

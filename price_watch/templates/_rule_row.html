@@ -3,6 +3,7 @@
   <a class="grow" href="/rules/{{ r.id }}">
     <strong class="kw">{{ r.keyword }}</strong>
     <div class="chips">
+      {% if r.item %}<span class="chip hot">produto: {{ (r.item.name or 'acompanhado')|truncate(28) }}</span>{% endif %}
       {% if r.groups %}{% for g in r.groups %}<span class="chip">{{ g.title }}</span>{% endfor %}
       {% else %}<span class="chip">todos os grupos</span>{% endif %}
       {% for e in r.exclusions.split(', ') if e %}<span class="chip neg">sem {{ e }}</span>{% endfor %}

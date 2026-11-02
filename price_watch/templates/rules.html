@@ -6,7 +6,7 @@
   <summary>{{ icon('edit' if edit else 'plus', 20) }} {{ 'Editar regra' if edit else 'Nova regra' }}</summary>
   <form method="post" action="/rules{{ '/%d' % edit.id if edit }}">
     <label>Palavra ou frase <input name="keyword" value="{{ edit.keyword if edit }}" placeholder="air fryer" required></label>
-    <p class="hint">Maiúsculas e acentos não importam. Termine com * para prefixo (ex.: <code>notebook*</code>).</p>
+    <p class="hint">Maiúsculas e acentos não importam. Termine com * para prefixo (<code>notebook*</code>); use " + " para exigir várias palavras em qualquer ordem (<code>galaxy + a27 + 256gb</code>).</p>
     <label>Exclusões <input name="exclusions" value="{{ edit.exclusions if edit }}" placeholder="usado, defeito"></label>
     <p class="hint">Separadas por vírgula. Se aparecerem na mensagem, não avisa.</p>
     <fieldset>

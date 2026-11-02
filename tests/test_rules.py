@@ -132,3 +132,17 @@ def test_format_alert_escapa_html():
     assert "&lt;Grupo &amp; Cia&gt;" in msg
     assert "&lt;b&gt;oi&lt;/b&gt;" in msg
     assert 'href="https://t.me/c/1/2"' in msg
+
+
+def test_todas_as_palavras_em_qualquer_ordem():
+    r = [rule("galaxy + a27 + 256gb")]
+    assert hits("🔥 Samsung Galaxy A27 5G 256GB por R$ 1.799 no Pix", r) == [1]
+    assert hits("256GB! Galaxy a27 com cupom", r) == [1]
+    assert hits("Galaxy A27 128GB por R$ 1.499", r) == []        # falta 256gb
+    assert hits("Galaxy A57 256GB", r) == []
+    assert hits("c++ em promoção", [rule("c++")]) == [1]          # '+' sem espaços não separa
+
+
+def test_trecho_com_varias_palavras_centra_na_primeira_encontrada():
+    texto = "x " * 300 + "Galaxy A27 256GB em oferta" + " y" * 300
+    assert "Galaxy A27 256GB" in snippet(texto, "galaxy + a27 + 256gb", width=80)

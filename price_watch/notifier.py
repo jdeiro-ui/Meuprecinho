@@ -27,11 +27,14 @@ async def close() -> None:
         await _client.aclose()
 
 
-def format_alert(group_title: str, keywords: list[str], text: str, link: str | None) -> str:
+def format_alert(group_title: str, keywords: list[str], text: str, link: str | None,
+                 extra: list[str] | None = None) -> str:
+    """extra: linhas já em HTML (ex.: comparação com o produto acompanhado)."""
     e = html.escape
     parts = [
         f"🔔 <b>{e(group_title)}</b>",
         f"Palavra: <i>{e(', '.join(keywords))}</i>",
+        *(["", *extra] if extra else []),
         "",
         e(text),
     ]

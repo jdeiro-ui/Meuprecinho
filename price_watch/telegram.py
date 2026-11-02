@@ -1,6 +1,7 @@
 """Conta do usuário via Telethon: pareamento, lista de grupos e listener."""
 
 import asyncio
+import html
 import logging
 from dataclasses import dataclass
 
@@ -20,7 +21,8 @@ from telethon.errors import (
 from . import notifier
 from .config import get_settings
 from .db import SessionLocal
-from .models import Alert, Rule, SeenMessage, TgGroup
+from .models import Alert, Item, Rule, SeenMessage, TgGroup
+from .pricing import format_brl, price_in_text
 from .rules import RuleSpec, match_message, message_link, snippet, split_terms
 
 log = logging.getLogger(__name__)
@@ -197,6 +199,7 @@ class TelegramManager:
                     keyword=r.keyword,
                     exclusions=split_terms(r.exclusions),
                     group_ids=frozenset(g.chat_id for g in r.groups),
+                    item_id=r.item_id,
                 )
                 for r in rules
             ]
@@ -215,8 +218,34 @@ class TelegramManager:
         keywords = [h.keyword for h in hits]
         trecho = snippet(text, hits[0].keyword)
         link = message_link(chat_id, event.id, group.username)
-        ok = await notifier.send(notifier.format_alert(group.title, keywords, trecho, link))
+        item_ids = [h.item_id for h in hits if h.item_id]
+        extra = await asyncio.to_thread(item_lines, item_ids, price_in_text(text)) if item_ids else None
+        ok = await notifier.send(notifier.format_alert(group.title, keywords, trecho, link, extra))
         await asyncio.to_thread(_save_alert, group.title, keywords, trecho, link, ok)
+
+
+def item_lines(item_ids: list[int], msg_price: int | None) -> list[str]:
+    """Linhas do aviso que comparam a promoção com o produto acompanhado."""
+    e = html.escape
+    lines = []
+    with SessionLocal() as db:
+        for iid in dict.fromkeys(item_ids):
+            item = db.get(Item, iid)
+            if item is None:
+                continue
+            lines.append(f"🎯 Seu produto: <b>{e(item.name or 'produto acompanhado')}</b>")
+            best = item.best_offer()
+            if msg_price:
+                notes = []
+                if item.target_cents and msg_price <= item.target_cents:
+                    notes.append("<b>abaixo do seu alvo!</b>")
+                if best and msg_price < best.current_cents:
+                    notes.append(f"melhor que nas lojas ({format_brl(best.current_cents)} na {e(best.store.name)})")
+                lines.append(f"💰 Preço na mensagem: <b>{format_brl(msg_price)}</b>"
+                             + (" — " + "; ".join(notes) if notes else ""))
+            elif best:
+                lines.append(f"🏷️ Melhor preço nas lojas: {format_brl(best.current_cents)} na {e(best.store.name)}")
+    return lines
 
 
 def _mark_seen(chat_id: int, message_id: int) -> bool:
