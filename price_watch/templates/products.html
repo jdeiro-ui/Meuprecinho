@@ -15,7 +15,7 @@
   </form>
 </details>
 <div class="actions split">
-  <a href="/stores" class="btn soft">{{ icon('store', 18) }} Lojas</a>
+  {% if me and me.is_admin %}<a href="/stores" class="btn soft">{{ icon('store', 18) }} Lojas</a>{% endif %}
 </div>
 {% for item in items %}{% include "_product_card.html" %}{% else %}
 <div class="empty">{{ icon('tag', 40) }}<p>Nenhum produto ainda.</p><small>Cole o link de um produto acima para começar.</small></div>

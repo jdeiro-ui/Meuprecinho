@@ -14,7 +14,7 @@ def test_listener_filtra_grupo_aplica_regra_e_nao_repete(monkeypatch):
     init_db()
     sent = []
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 

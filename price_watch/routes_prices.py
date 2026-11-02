@@ -10,10 +10,10 @@ from sqlalchemy import select
 
 from . import affiliate, item_rules, linking, monitor
 from .telegram import manager
-from .models import Item, PricePoint, Product, Rule, Store, Suggestion, utcnow
+from .models import Item, PricePoint, Product, Rule, Store, Suggestion, User, utcnow
 from .pricing import find_url, host_of, parse_brl
 from .stores_catalog import BY_DOMAIN, CATALOG
-from .web import DB, Auth, back, flash, render
+from .web import DB, AdminOnly, Auth, Me, back, flash, render
 
 router = APIRouter(dependencies=[Auth])
 
@@ -23,9 +23,15 @@ FETCH_VIA = {"vm": "Servidor", "home": "Celular de casa", "api": "API oficial (M
 
 # ---------- produtos (itens com ofertas em várias lojas) ----------
 
+def _own_item(db, me: User, item_id: int) -> Item | None:
+    item = db.get(Item, item_id)
+    return item if item is not None and item.user_id == me.id else None
+
+
 @router.get("/products")
-def products(request: Request, db: DB, url: str = ""):
-    items = db.scalars(select(Item).order_by(Item.active.desc(), Item.created_at.desc())).all()
+def products(request: Request, db: DB, me: Me, url: str = ""):
+    items = db.scalars(select(Item).where(Item.user_id == me.id)
+                       .order_by(Item.active.desc(), Item.created_at.desc())).all()
     return render(request, "products.html", items=items, prefill=url)
 
 
@@ -54,17 +60,17 @@ def _start_reading(background: BackgroundTasks, offer: Product) -> None:
 
 
 @router.post("/products")
-async def product_add(request: Request, db: DB, background: BackgroundTasks, url: str = Form(),
+async def product_add(request: Request, db: DB, me: Me, background: BackgroundTasks, url: str = Form(),
                       target: str = Form(""), name: str = Form("")):
     link, original = await _prepare_link(url)
     if not link:
         flash(request, "Cole o link completo do produto (começando com https://)", "err")
         return back("/products")
-    if existing := db.scalar(select(Product).where(Product.url == link)):
+    if existing := db.scalar(select(Product).join(Item).where(Product.url == link, Item.user_id == me.id)):
         flash(request, "Esse produto já está na lista", "err")
         return back(f"/products/{existing.item_id}" if existing.item_id else "/products")
     store = linking.store_for(db, link)
-    item = Item(name=name.strip() or None, target_cents=parse_brl(target))
+    item = Item(user_id=me.id, name=name.strip() or None, target_cents=parse_brl(target))
     offer = Product(item=item, store=store, url=link, source_url=original)
     db.add_all([item, offer])
     db.flush()
@@ -78,15 +84,16 @@ async def product_add(request: Request, db: DB, background: BackgroundTasks, url
 
 
 @router.post("/products/{item_id}/offers")
-async def offer_add(request: Request, db: DB, background: BackgroundTasks, item_id: int, url: str = Form()):
-    item = db.get(Item, item_id)
+async def offer_add(request: Request, db: DB, me: Me, background: BackgroundTasks, item_id: int,
+                    url: str = Form()):
+    item = _own_item(db, me, item_id)
     if item is None:
         return back("/products")
     link, original = await _prepare_link(url)
     if not link:
         flash(request, "Cole o link completo do produto nessa outra loja", "err")
         return back(f"/products/{item_id}")
-    if db.scalar(select(Product).where(Product.url == link)):
+    if db.scalar(select(Product).where(Product.url == link, Product.item_id == item.id)):
         flash(request, "Esse link já está cadastrado", "err")
         return back(f"/products/{item_id}")
     store = linking.store_for(db, link)
@@ -123,8 +130,8 @@ def _chart(vals: list[int], w: int = 320, h: int = 110) -> dict | None:
 
 
 @router.get("/products/{item_id}")
-def product_detail(request: Request, db: DB, item_id: int):
-    item = db.get(Item, item_id)
+def product_detail(request: Request, db: DB, me: Me, item_id: int):
+    item = _own_item(db, me, item_id)
     if item is None:
         return back("/products")
     since = utcnow() - timedelta(days=180)
@@ -142,9 +149,9 @@ def product_detail(request: Request, db: DB, item_id: int):
 
 
 @router.post("/products/{item_id}")
-async def product_save(request: Request, db: DB, item_id: int, name: str = Form(""), target: str = Form(""),
+async def product_save(request: Request, db: DB, me: Me, item_id: int, name: str = Form(""), target: str = Form(""),
                        active: bool = Form(False), watch_telegram: bool = Form(False), units: str = Form("")):
-    item = db.get(Item, item_id)
+    item = _own_item(db, me, item_id)
     if item is None:
         return back("/products")
     item.name = name.strip() or item.name
@@ -166,8 +173,8 @@ async def product_save(request: Request, db: DB, item_id: int, name: str = Form(
 
 
 @router.post("/products/{item_id}/check")
-async def product_check(request: Request, db: DB, item_id: int):
-    item = db.get(Item, item_id)
+async def product_check(request: Request, db: DB, me: Me, item_id: int):
+    item = _own_item(db, me, item_id)
     if item:
         if item.zoom_url:
             await monitor.refresh_zoom(item_id)
@@ -184,7 +191,9 @@ async def product_check(request: Request, db: DB, item_id: int):
 
 
 @router.post("/products/{item_id}/discover")
-async def product_discover(request: Request, item_id: int):
+async def product_discover(request: Request, db: DB, me: Me, item_id: int):
+    if _own_item(db, me, item_id) is None:
+        return back("/products")
     summary = await monitor.run_discovery(item_id)
     parts = []
     if summary["added"]:
@@ -199,12 +208,14 @@ async def product_discover(request: Request, item_id: int):
 
 
 @router.post("/suggestions/{sug_id}/{action}")
-async def suggestion_answer(request: Request, db: DB, background: BackgroundTasks, sug_id: int, action: str):
+async def suggestion_answer(request: Request, db: DB, me: Me, background: BackgroundTasks, sug_id: int,
+                            action: str):
     sug = db.get(Suggestion, sug_id)
-    if sug is None:
+    if sug is None or _own_item(db, me, sug.item_id) is None:
         return back("/products")
     item_id = sug.item_id
-    if action == "accept" and not db.scalar(select(Product).where(Product.url == sug.url)):
+    if action == "accept" and not db.scalar(select(Product).where(Product.url == sug.url,
+                                                                  Product.item_id == item_id)):
         item = db.get(Item, item_id)
         offer = Product(item=item, store=linking.store_for(db, sug.url), url=sug.url, active=item.active)
         db.add(offer)
@@ -219,8 +230,8 @@ async def suggestion_answer(request: Request, db: DB, background: BackgroundTask
 
 
 @router.post("/products/{item_id}/delete")
-async def product_delete(request: Request, db: DB, item_id: int):
-    if item := db.get(Item, item_id):
+async def product_delete(request: Request, db: DB, me: Me, item_id: int):
+    if item := _own_item(db, me, item_id):
         db.delete(item)  # a regra do Telegram do produto vai junto (ON DELETE CASCADE)
         db.commit()
         await asyncio.to_thread(manager.reload)
@@ -229,9 +240,9 @@ async def product_delete(request: Request, db: DB, item_id: int):
 
 
 @router.post("/offers/{offer_id}/delete")
-def offer_delete(request: Request, db: DB, offer_id: int):
+def offer_delete(request: Request, db: DB, me: Me, offer_id: int):
     offer = db.get(Product, offer_id)
-    if offer is None:
+    if offer is None or offer.item is None or offer.item.user_id != me.id:
         return back("/products")
     item_id = offer.item_id
     db.delete(offer)
@@ -262,17 +273,17 @@ def _stores_page(request: Request, db, edit: Store | None = None):
                   suggestions=suggestions)
 
 
-@router.get("/stores")
+@router.get("/stores", dependencies=[AdminOnly])
 def stores(request: Request, db: DB):
     return _stores_page(request, db)
 
 
-@router.get("/stores/{store_id}")
+@router.get("/stores/{store_id}", dependencies=[AdminOnly])
 def store_edit(request: Request, db: DB, store_id: int):
     return _stores_page(request, db, db.get(Store, store_id))
 
 
-@router.post("/stores/suggested")
+@router.post("/stores/suggested", dependencies=[AdminOnly])
 def store_add_suggested(request: Request, db: DB, domain: str = Form()):
     c = BY_DOMAIN.get(domain)
     if c and not db.scalar(select(Store).where(Store.domain == domain)):
@@ -282,8 +293,8 @@ def store_add_suggested(request: Request, db: DB, domain: str = Form()):
     return back("/stores")
 
 
-@router.post("/stores")
-@router.post("/stores/{store_id}")
+@router.post("/stores", dependencies=[AdminOnly])
+@router.post("/stores/{store_id}", dependencies=[AdminOnly])
 def store_save(request: Request, db: DB, name: str = Form(), domain: str = Form(),
                interval_minutes: int = Form(60), read_mode: str = Form("http"),
                price_selector: str = Form(""), fetch_via: str = Form("vm"), store_id: int | None = None):
@@ -310,7 +321,7 @@ def store_save(request: Request, db: DB, name: str = Form(), domain: str = Form(
     return back("/stores")
 
 
-@router.post("/stores/{store_id}/delete")
+@router.post("/stores/{store_id}/delete", dependencies=[AdminOnly])
 def store_delete(request: Request, db: DB, store_id: int):
     if store := db.get(Store, store_id):
         db.delete(store)

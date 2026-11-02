@@ -257,7 +257,7 @@ def _add_offer(item_id: int, cand: Candidate) -> int | None:
     url = affiliate.clean_url(cand.url)
     with SessionLocal() as db:
         item = db.get(Item, item_id)
-        if item is None or db.scalar(select(Product).where(Product.url == url)):
+        if item is None or db.scalar(select(Product).where(Product.url == url, Product.item_id == item_id)):
             return None
         offer = Product(item=item, store=linking.store_for(db, url), url=url, active=item.active)
         db.add(offer)
@@ -272,7 +272,7 @@ def _suggest(item_id: int, cands: list[Candidate]) -> int:
         for c in cands:
             url = affiliate.clean_url(c.url)
             exists = db.scalar(select(Suggestion).where(Suggestion.item_id == item_id, Suggestion.url == url))
-            if exists or db.scalar(select(Product).where(Product.url == url)):
+            if exists or db.scalar(select(Product).where(Product.url == url, Product.item_id == item_id)):
                 continue
             db.add(Suggestion(item_id=item_id, url=url, store_name=c.store_name, title=c.title[:300],
                               price_cents=c.price))

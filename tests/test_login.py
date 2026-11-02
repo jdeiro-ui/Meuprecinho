@@ -25,4 +25,4 @@ def test_bloqueia_apos_muitas_senhas_erradas(monkeypatch):
     assert "Muitas tentativas" in r.text
     main._fails.clear()
     r = c.post("/login", data={"username": "admin", "password": "senha-certa"})
-    assert r.url.path == "/alerts"
+    assert r.url.path == "/products"

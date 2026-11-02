@@ -50,6 +50,13 @@ _NEW_COLUMNS = [
     ("items", "pack_qty", "INTEGER", None),
     ("items", "zoom_checked_at", "DATETIME", None),
     ("products", "zoom_oid", "VARCHAR(30)", None),
+    ("users", "is_admin", "BOOLEAN NOT NULL DEFAULT 0", None),
+    ("users", "telegram_chat_id", "VARCHAR(32)", None),
+    ("users", "tg_link_token", "VARCHAR(48)", None),
+    ("users", "created_at", "DATETIME", None),
+    ("items", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE", None),
+    ("rules", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE", None),
+    ("alerts", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE", None),
 ]
 
 
@@ -62,7 +69,58 @@ _DATA_MIGRATIONS = [
      "SELECT id, name, image_url, target_cents, current_cents, lowest_cents, last_notified_cents, "
      "active, created_at FROM products WHERE item_id IS NULL"),
     ("mig_items_link", "UPDATE products SET item_id = id WHERE item_id IS NULL"),
+    # Contas: quem já usava o app vira administrador e dono dos dados existentes
+    ("mig_admin", "UPDATE users SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM users)"),
+    ("mig_owner_items", "UPDATE items SET user_id = (SELECT MIN(id) FROM users) WHERE user_id IS NULL"),
+    ("mig_owner_rules", "UPDATE rules SET user_id = (SELECT MIN(id) FROM users) WHERE user_id IS NULL"),
+    ("mig_owner_alerts", "UPDATE alerts SET user_id = (SELECT MIN(id) FROM users) WHERE user_id IS NULL"),
 ]
+
+
+def _rebuild_products() -> None:
+    """products.url era UNIQUE no app inteiro; agora é único por item. O SQLite não remove
+    restrições, então a tabela é recriada seguindo o procedimento oficial do SQLite
+    (chaves estrangeiras desligadas na MESMA conexão, para não reescrever as referências
+    de price_points)."""
+    from sqlalchemy.schema import CreateIndex, CreateTable
+
+    from .models import Product
+
+    raw = engine.raw_connection()
+    try:
+        con = raw.driver_connection
+        sql = (con.execute("SELECT sql FROM sqlite_master WHERE name = 'products'").fetchone() or [""])[0] or ""
+        flat = " ".join(sql.split())
+        if "url VARCHAR(2000) NOT NULL UNIQUE" not in flat and "UNIQUE (url)" not in flat:
+            return
+        dialect = engine.dialect
+        create_table = str(CreateTable(Product.__table__).compile(dialect=dialect))
+        create_indexes = [str(CreateIndex(ix).compile(dialect=dialect)) for ix in Product.__table__.indexes]
+        cols = [r[1] for r in con.execute("PRAGMA table_info(products)")]
+        keep = ", ".join(c for c in cols if c in Product.__table__.c)
+
+        old_isolation = con.isolation_level
+        con.isolation_level = None  # controla a transação manualmente
+        con.execute("PRAGMA foreign_keys = OFF")
+        con.execute("BEGIN")
+        try:
+            con.execute(create_table.replace("CREATE TABLE products", "CREATE TABLE products_new", 1))
+            con.execute(f"INSERT INTO products_new ({keep}) SELECT {keep} FROM products")
+            con.execute("DROP TABLE products")
+            con.execute("ALTER TABLE products_new RENAME TO products")
+            for stmt in create_indexes:
+                con.execute(stmt)
+            if con.execute("PRAGMA foreign_key_check").fetchall():
+                raise RuntimeError("chave estrangeira inválida após recriar products")
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        finally:
+            con.execute("PRAGMA foreign_keys = ON")
+            con.isolation_level = old_isolation
+    finally:
+        raw.close()
 
 
 def init_db() -> None:
@@ -71,6 +129,7 @@ def init_db() -> None:
     from .stores_catalog import HOME_DOMAINS
 
     Base.metadata.create_all(engine)
+    _rebuild_products()
     home = ", ".join(f"'{d}'" for d in HOME_DOMAINS)
     with engine.begin() as conn:
         for table, column, ddl, after in _NEW_COLUMNS:

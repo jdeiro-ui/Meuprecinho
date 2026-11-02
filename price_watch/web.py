@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import get_db
+from .models import User
 from .affiliate import click_sig
 from .pricing import format_brl
 from .telegram import manager
@@ -58,6 +59,10 @@ class LoginRequired(Exception):
     pass
 
 
+class AdminRequired(Exception):
+    pass
+
+
 def require_user(request: Request) -> int:
     uid = request.session.get("uid")
     if not uid:
@@ -65,12 +70,30 @@ def require_user(request: Request) -> int:
     return uid
 
 
-Auth = Depends(require_user)
+def current_user(request: Request, db: Annotated[Session, Depends(get_db)]) -> User:
+    user = db.get(User, require_user(request))
+    if user is None:  # conta removida com a sessão ainda aberta
+        request.session.clear()
+        raise LoginRequired
+    request.state.user = user
+    return user
+
+
+def require_admin(user: Annotated[User, Depends(current_user)]) -> User:
+    if not user.is_admin:
+        raise AdminRequired
+    return user
+
+
+Auth = Depends(current_user)
+AdminOnly = Depends(require_admin)
+Me = Annotated[User, Depends(current_user)]
 
 
 def render(request: Request, name: str, **ctx) -> HTMLResponse:
     ctx.setdefault("flash", request.session.pop("flash", None))
     ctx.setdefault("tg", manager)
+    ctx.setdefault("me", getattr(request.state, "user", None))
     return templates.TemplateResponse(request, name, ctx)
 
 

@@ -19,7 +19,7 @@ def test_coletor_fila_reserva_e_resultado(monkeypatch):
     init_db()
     sent = []
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 

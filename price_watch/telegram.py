@@ -21,7 +21,7 @@ from telethon.errors import (
 from . import notifier
 from .config import get_settings
 from .db import SessionLocal
-from .models import Alert, Item, Rule, SeenMessage, TgGroup
+from .models import Alert, Item, Rule, SeenMessage, TgGroup, User
 from .pricing import format_brl, pack_qty, price_in_text
 from .rules import RuleSpec, match_message, message_link, snippet, split_terms
 
@@ -48,6 +48,7 @@ class TelegramManager:
         # Cache em memória para o listener não consultar o banco a cada mensagem
         self.groups: dict[int, GroupInfo] = {}
         self.rules: list[RuleSpec] = []
+        self.user_chats: dict[int, str | None] = {}
         self._lock = asyncio.Lock()
         self._connect_task: asyncio.Task | None = None
 
@@ -193,6 +194,8 @@ class TelegramManager:
             groups = db.scalars(select(TgGroup).where(TgGroup.monitored)).all()
             rules = db.scalars(select(Rule).where(Rule.active)).all()
             self.groups = {g.chat_id: GroupInfo(g.title, g.username) for g in groups}
+            # Conversa de cada usuário com o bot (para onde vão os avisos)
+            self.user_chats = {u.id: u.telegram_chat_id for u in db.scalars(select(User))}
             self.rules = [
                 RuleSpec(
                     id=r.id,
@@ -201,6 +204,7 @@ class TelegramManager:
                     group_ids=frozenset(g.chat_id for g in r.groups),
                     item_id=r.item_id,
                     units=r.item.units if r.item else 1,
+                    user_id=r.user_id,
                 )
                 for r in rules
             ]
@@ -219,13 +223,19 @@ class TelegramManager:
             return
         if not await asyncio.to_thread(_mark_seen, chat_id, event.id):
             return  # já avisado (ex.: reentrega após reconexão)
-        keywords = [h.keyword for h in hits]
-        trecho = snippet(text, hits[0].keyword)
         link = message_link(chat_id, event.id, group.username)
-        item_ids = [h.item_id for h in hits if h.item_id]
-        extra = await asyncio.to_thread(item_lines, item_ids, price_in_text(text)) if item_ids else None
-        ok = await notifier.send(notifier.format_alert(group.title, keywords, trecho, link, extra))
-        await asyncio.to_thread(_save_alert, group.title, keywords, trecho, link, ok)
+        msg_price = price_in_text(text)
+        by_user: dict[int | None, list] = {}
+        for h in hits:  # um aviso por usuário, com todas as regras dele que bateram
+            by_user.setdefault(h.user_id, []).append(h)
+        for user_id, user_hits in by_user.items():
+            keywords = [h.keyword for h in user_hits]
+            trecho = snippet(text, user_hits[0].keyword)
+            item_ids = [h.item_id for h in user_hits if h.item_id]
+            extra = await asyncio.to_thread(item_lines, item_ids, msg_price) if item_ids else None
+            chat = getattr(self, "user_chats", {}).get(user_id)
+            ok = await notifier.send(notifier.format_alert(group.title, keywords, trecho, link, extra), chat_id=chat)
+            await asyncio.to_thread(_save_alert, group.title, keywords, trecho, link, ok, user_id)
 
 
 def item_lines(item_ids: list[int], msg_price: int | None) -> list[str]:
@@ -264,9 +274,11 @@ def _mark_seen(chat_id: int, message_id: int) -> bool:
             return False
 
 
-def _save_alert(title: str, keywords: list[str], trecho: str, link: str | None, ok: bool) -> None:
+def _save_alert(title: str, keywords: list[str], trecho: str, link: str | None, ok: bool,
+                user_id: int | None = None) -> None:
     with SessionLocal() as db:
-        db.add(Alert(group_title=title, keywords=", ".join(keywords), snippet=trecho, link=link, delivered=ok))
+        db.add(Alert(user_id=user_id, group_title=title, keywords=", ".join(keywords), snippet=trecho,
+                     link=link, delivered=ok))
         db.commit()
 
 

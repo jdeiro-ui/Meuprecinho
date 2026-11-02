@@ -91,9 +91,12 @@ def test_tela_mostra_sugestoes_e_confirmar_vira_oferta(lojas, monkeypatch):
 
     monkeypatch.setattr(monitor, "check_product", fake_check)
     with SessionLocal() as db:
-        if not db.query(User).filter_by(username="disc").first():
-            db.add(User(username="disc", password_hash=hash_password("senha-disc-1")))
-        item = Item(name="Smartphone Samsung Galaxy A27 5G 256GB", brand="Samsung")
+        user = db.query(User).filter_by(username="disc").first()
+        if not user:
+            user = User(username="disc", password_hash=hash_password("senha-disc-1"))
+            db.add(user)
+            db.flush()
+        item = Item(name="Smartphone Samsung Galaxy A27 5G 256GB", brand="Samsung", user_id=user.id)
         db.add_all([item, Product(item=item, store=Store(name="Loja E", domain="loja-e-disc.com.br"),
                                   url="https://loja-e-disc.com.br/a27"),
                     ])

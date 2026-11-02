@@ -44,6 +44,18 @@ Depois abra o endereço no Chrome → menu ⋮ → *Instalar app*.
 Cada mensagem gera no máximo um aviso (tabela `seen_messages`), com nome do grupo,
 trecho e link (grupos básicos, que não são supergrupos, não têm link de mensagem).
 
+## Contas (lançamento fechado)
+
+- **Administrador**: quem já usava o app (ou quem rodar `python -m price_watch.cli set-password
+  NOME`). Só ele vê Grupos, Lojas, pareamento do Telegram, Mercado Livre, coletor e **Convites**.
+- **Convites**: em *Conta → Convites*, crie um link por pessoa (`/convite/<código>`), que vale para
+  uma conta só. A pessoa escolhe usuário e senha e já entra.
+- **Avisos por usuário**: em *Conta → Conectar Telegram*, o link `t.me/<bot>?start=<código>` liga a
+  conversa da pessoa ao bot (`bot.py`, long polling); `/parar` desliga. Cada usuário tem os seus
+  produtos, regras e avisos; os grupos lidos são os do administrador, e cada mensagem é cruzada com
+  as regras de todos, com um aviso por pessoa. Sem Telegram conectado, o aviso fica só no app.
+- O `CHAT_ID` do `.env` vira a conversa do administrador na primeira inicialização.
+
 ## Preços (fase 3)
 
 - **Produtos**: cole o link do produto ou, com o app instalado, use *Compartilhar → MeuPrecinho*

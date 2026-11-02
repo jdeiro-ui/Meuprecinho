@@ -112,7 +112,7 @@ def test_mercado_livre_lido_pelo_link_de_afiliado_e_aviso_usa_link_do_app(monkey
         else httpx.Response(200, text=html)))
     sent = []
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 

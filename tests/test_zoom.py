@@ -54,7 +54,7 @@ def test_ofertas_do_zoom_entram_na_comparacao_e_avisam(zoom_net, monkeypatch):
     init_db()
     sent = []
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 

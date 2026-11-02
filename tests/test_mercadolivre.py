@@ -81,7 +81,7 @@ def test_fluxo_oauth_completo_pelo_painel(ml):
         from price_watch.models import User
         from price_watch.security import hash_password
         if not db.query(User).filter_by(username="mladmin").first():
-            db.add(User(username="mladmin", password_hash=hash_password("senha-ml-123")))
+            db.add(User(username="mladmin", password_hash=hash_password("senha-ml-123"), is_admin=True))
             db.commit()
     main._fails.clear()
     c.post("/login", data={"username": "mladmin", "password": "senha-ml-123"})
@@ -126,7 +126,7 @@ def test_monitor_usa_a_api_para_lojas_api(ml, monkeypatch):
     mercadolivre._put({"ml_refresh_token": "RT0", "ml_access_token": "AT0", "ml_expires_at": int(time.time()) + 999})
     sent = []
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 

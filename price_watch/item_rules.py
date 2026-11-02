@@ -123,7 +123,7 @@ def sync(db, item: Item) -> bool:
         if not keyword:
             return False
         db.add(Rule(keyword=keyword, exclusions=DEFAULT_EXCLUSIONS, active=item.active,
-                    item_id=item.id, auto=True))
+                    item_id=item.id, user_id=item.user_id, auto=True))
         return True
     changed = False
     if rule.auto and keyword and keyword != rule.keyword:

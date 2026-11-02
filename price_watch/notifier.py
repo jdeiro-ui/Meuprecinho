@@ -58,15 +58,32 @@ def format_price_alert(store: str, name: str, old: int | None, new: int, target:
     return "\n".join(parts)
 
 
-async def send(text_html: str, retries: int = 3) -> bool:
+def admin_chat() -> str | None:
+    """Conversa do administrador (avisos técnicos, ex.: coletor parado)."""
+    from sqlalchemy import select
+
+    from .db import SessionLocal
+    from .models import User
+
+    with SessionLocal() as db:
+        chat = db.scalar(select(User.telegram_chat_id).where(User.is_admin, User.telegram_chat_id.is_not(None)))
+    return chat or get_settings().CHAT_ID or None
+
+
+async def send(text_html: str, chat_id: str | None = None, retries: int = 3) -> bool:
+    """Envia para a conversa do usuário. Sem conversa conectada, não envia (nunca cai na
+    conversa de outra pessoa)."""
     global last_error
     s = get_settings()
-    if not s.bot_configured:
-        log.warning("Bot não configurado (BOT_TOKEN/CHAT_ID); aviso não enviado")
+    if not s.BOT_TOKEN:
+        log.warning("Bot não configurado (BOT_TOKEN); aviso não enviado")
+        return False
+    if not chat_id:
+        last_error = "usuário sem Telegram conectado"
         return False
     url = f"https://api.telegram.org/bot{s.BOT_TOKEN}/sendMessage"
     payload = {
-        "chat_id": s.CHAT_ID,
+        "chat_id": chat_id,
         "text": text_html,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,

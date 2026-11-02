@@ -199,7 +199,7 @@ async def refresh(item_id: int) -> list[tuple[int, Extracted]]:
             offer = current.get(store.id)
             lead = f"{BASE}/lead?oid={zo.oid}"
             if offer is None:
-                if db.scalar(select(Product).where(Product.url == lead)):
+                if db.scalar(select(Product).where(Product.url == lead, Product.item_id == item_id)):
                     continue
                 offer = Product(item=item, store=store, url=lead, zoom_oid=zo.oid, active=item.active)
                 db.add(offer)

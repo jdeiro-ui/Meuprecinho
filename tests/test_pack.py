@@ -71,7 +71,7 @@ def test_telegram_promocao_da_unidade_nao_avisa_a_caixa(monkeypatch):
     init_db()
     sent = []
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 

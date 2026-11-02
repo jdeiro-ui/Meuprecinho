@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from . import affiliate, fetcher, item_rules, linking, mercadolivre, notifier
 from .db import SessionLocal
-from .models import Alert, Item, PricePoint, Product, utcnow
+from .models import Alert, Item, PricePoint, Product, User, utcnow
 from .pricing import extract, format_brl, host_of, should_notify
 
 log = logging.getLogger(__name__)
@@ -83,7 +83,8 @@ async def fix_short_link(product_id: int) -> None:
         return
     with SessionLocal() as db:
         p = db.get(Product, product_id)
-        if db.scalar(select(Product).where(Product.url == final, Product.id != product_id)):
+        if db.scalar(select(Product).where(Product.url == final, Product.item_id == p.item_id,
+                                           Product.id != product_id)):
             p.last_error = "produto repetido: ele já está na sua lista (pode remover este)"
             db.commit()
             return
@@ -190,7 +191,8 @@ async def collector_watchdog(started_at: datetime) -> None:
         mins = int(silent.total_seconds() // 60)
         await notifier.send(f"⚠️ <b>Coletor de casa sem contato há {mins} min.</b>\n"
                             "Os preços das lojas lidas pelo celular estão parados. "
-                            "Confira se o Termux continua aberto no celular.")
+                            "Confira se o Termux continua aberto no celular.",
+                            chat_id=await asyncio.to_thread(notifier.admin_chat))
 
 
 def _has_home_products() -> bool:
@@ -252,8 +254,9 @@ async def _finish(product_id: int, ex, error: str | None) -> None:
 
         await asyncio.to_thread(manager.reload)
     if alert:
-        ok = await notifier.send(notifier.format_price_alert(**alert))
-        await asyncio.to_thread(_save_alert, alert, ok)
+        user_id, chat_id = alert.pop("user_id"), alert.pop("chat_id")
+        ok = await notifier.send(notifier.format_price_alert(**alert), chat_id=chat_id)
+        await asyncio.to_thread(_save_alert, alert, ok, user_id)
     if error:
         log.info("Produto %s: leitura falhou", product_id)  # sem URL nem conteúdo
 
@@ -316,15 +319,17 @@ def _save_result(product_id: int, ex, error: str | None) -> dict | None:
         db.commit()
         if not reason:
             return None
-        return {"store": best.store.name, "name": item.name or best.name or "Produto",
+        owner = db.get(User, item.user_id) if item.user_id else None
+        return {"user_id": item.user_id, "chat_id": owner.telegram_chat_id if owner else None,
+                "store": best.store.name, "name": item.name or best.name or "Produto",
                 "old": best_before if best_before != best.current_cents else None,
                 "new": best.current_cents, "target": item.target_cents, "reason": reason,
                 "url": affiliate.buy_url(best.url)}
 
 
-def _save_alert(a: dict, ok: bool) -> None:
+def _save_alert(a: dict, ok: bool, user_id: int | None = None) -> None:
     change = f"{format_brl(a['old'])} → {format_brl(a['new'])}" if a["old"] else format_brl(a["new"])
     with SessionLocal() as db:
-        db.add(Alert(source="price", group_title=a["store"], keywords=a["reason"],
+        db.add(Alert(user_id=user_id, source="price", group_title=a["store"], keywords=a["reason"],
                      snippet=f"{a['name']}\n{change}", link=a["url"], delivered=ok))
         db.commit()

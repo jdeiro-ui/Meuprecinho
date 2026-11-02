@@ -1,33 +1,51 @@
 {% extends "base.html" %}
-{% block heading %}Conta<script>
-  // O login do Mercado Livre abre no navegador; ao voltar para o app, recarrega a tela
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") return;
-    try {
-      const t = Number(localStorage.getItem("ml-pending") || 0);
-      if (t && Date.now() - t < 15 * 60 * 1000) {
-        localStorage.removeItem("ml-pending");
-        location.reload();
-      }
-    } catch (e) {}
-  });
-</script>
-{% endblock %}
-{% block subtitle %}<p class="sub">Telegram e sessão do painel</p><script>
-  // O login do Mercado Livre abre no navegador; ao voltar para o app, recarrega a tela
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") return;
-    try {
-      const t = Number(localStorage.getItem("ml-pending") || 0);
-      if (t && Date.now() - t < 15 * 60 * 1000) {
-        localStorage.removeItem("ml-pending");
-        location.reload();
-      }
-    } catch (e) {}
-  });
-</script>
-{% endblock %}
+{% block heading %}Conta{% endblock %}
+{% block subtitle %}<p class="sub">{{ me.username }}{% if me.is_admin %} · administrador{% endif %}</p>{% endblock %}
 {% block content %}
+<section class="card" id="avisos">
+  <h2>Avisos no Telegram</h2>
+  {% if me.telegram_chat_id %}
+  <p><span class="status inline on"><span class="dot"></span>conectado: seus avisos chegam pelo bot</span></p>
+  <form method="post" action="/conta/telegram/desconectar" onsubmit="return confirm('Parar de receber os avisos no Telegram?')">
+    <button class="btn ghost small">Desconectar</button>
+  </form>
+  {% elif bot_link %}
+  <p class="hint">Toque no botão, depois em <b>Iniciar</b> no Telegram. Pronto: os avisos dos seus produtos e
+    das promoções passam a chegar lá.</p>
+  <a href="{{ bot_link }}" class="btn primary block" onclick="try{localStorage.setItem('tg-pending', Date.now())}catch(e){}">Conectar Telegram</a>
+  {% else %}
+  <p class="hint">O bot ainda não está configurado no servidor.</p>
+  {% endif %}
+</section>
+
+{% if me.is_admin %}
+<h2 class="section-title" id="convites">Convites</h2>
+<section class="card">
+  <form method="post" action="/convites" class="invite-form">
+    <label>Para quem é (opcional) <input name="note" placeholder="Ex.: Maria (irmã)"></label>
+    <button class="btn primary">Criar convite</button>
+  </form>
+  {% if invites %}
+  <ul class="invites">
+    {% for inv in invites %}
+    <li>
+      <div class="grow">
+        <strong>{{ inv.note or 'Convite' }}</strong>
+        {% if inv.used_by %}<small>usado por <b>{{ users.get(inv.used_by, '?') }}</b> {{ inv.used_at|ago }}</small>
+        {% else %}<small><code id="inv{{ inv.id }}">{{ invite_base }}{{ inv.code }}</code></small>{% endif %}
+      </div>
+      {% if not inv.used_by %}
+      <button type="button" class="icon-btn" aria-label="Copiar link"
+              onclick="navigator.clipboard.writeText(document.getElementById('inv{{ inv.id }}').textContent).then(()=>{this.classList.add('ok')})">{{ icon('link', 18) }}</button>
+      <form method="post" action="/convites/{{ inv.id }}/delete"><button class="icon-btn danger" aria-label="Apagar convite">{{ icon('x', 18) }}</button></form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<h2 class="section-title">Leitura dos grupos (sua conta do Telegram)</h2>
 {% if not configured %}
 <div class="toast err">{{ icon('alert', 20) }}<span>Defina API_ID e API_HASH no .env e reinicie o app.</span></div>
 {% elif tg.authorized %}
@@ -118,19 +136,32 @@
     </form>
   </details>
 </section>
+{% endif %}
+
+<details class="card form-card">
+  <summary>{{ icon('edit', 20) }} Trocar senha</summary>
+  <form method="post" action="/conta/senha">
+    <label>Senha atual <input name="current" type="password" autocomplete="current-password" required></label>
+    <label>Nova senha (8+ caracteres) <input name="new" type="password" autocomplete="new-password" minlength="8" required></label>
+    <button class="btn primary block">Salvar</button>
+  </form>
+</details>
 
 <form method="post" action="/logout" class="actions">
-  <button class="btn soft">{{ icon('logout', 18) }} Sair do painel</button>
+  <button class="btn soft">{{ icon('logout', 18) }} Sair</button>
 </form>
 <script>
-  // O login do Mercado Livre abre no navegador; ao voltar para o app, recarrega a tela
+  // Conectar Telegram / Mercado Livre abre fora do app; ao voltar, recarrega a tela
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     try {
-      const t = Number(localStorage.getItem("ml-pending") || 0);
-      if (t && Date.now() - t < 15 * 60 * 1000) {
-        localStorage.removeItem("ml-pending");
-        location.reload();
+      for (const key of ["ml-pending", "tg-pending"]) {
+        const t = Number(localStorage.getItem(key) || 0);
+        if (t && Date.now() - t < 15 * 60 * 1000) {
+          localStorage.removeItem(key);
+          location.reload();
+          return;
+        }
       }
     } catch (e) {}
   });

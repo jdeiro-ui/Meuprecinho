@@ -15,6 +15,7 @@ class RuleSpec:
     active: bool = True
     item_id: int | None = None  # regra de um produto acompanhado
     units: int = 1              # unidades por embalagem do produto (caixa com 12 = 12)
+    user_id: int | None = None  # dono da regra (quem recebe o aviso)
 
 
 def _norm_char(ch: str) -> str:

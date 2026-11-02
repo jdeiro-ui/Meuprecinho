@@ -97,7 +97,7 @@ def test_regra_nasce_na_primeira_leitura_e_aviso_do_telegram_compara(monkeypatch
 
     sent = []
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 

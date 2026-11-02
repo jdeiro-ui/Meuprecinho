@@ -30,7 +30,7 @@ def test_melhor_preco_entre_lojas_e_aviso_aponta_a_loja(monkeypatch):
     async def fake_fetch(url, mode):
         return _page(prices[url])
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 
@@ -71,9 +71,12 @@ def test_adicionar_outra_loja_pelo_painel(monkeypatch):
     with SessionLocal() as db:
         from price_watch.models import User
         from price_watch.security import hash_password
-        if not db.query(User).filter_by(username="multi").first():
-            db.add(User(username="multi", password_hash=hash_password("senha-multi-1")))
-        item = Item(name="Fone")
+        user = db.query(User).filter_by(username="multi").first()
+        if not user:
+            user = User(username="multi", password_hash=hash_password("senha-multi-1"))
+            db.add(user)
+            db.flush()
+        item = Item(name="Fone", user_id=user.id)
         db.add_all([item, Product(item=item, store=Store(name="Loja C", domain="loja-c-multi.com.br"),
                                   url="https://loja-c-multi.com.br/fone")])
         db.commit()

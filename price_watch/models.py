@@ -27,6 +27,25 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    # Administrador: escolhe grupos e lojas, conecta Telegram/Mercado Livre, gera convites
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Conversa do usuário com o bot (avisos); preenchida ao tocar no link t.me/<bot>?start=<token>
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(32))
+    tg_link_token: Mapped[str | None] = mapped_column(String(48), index=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Invite(Base):
+    """Convite para criar conta (lançamento fechado)."""
+
+    __tablename__ = "invites"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True)
+    note: Mapped[str] = mapped_column(String(120), default="")  # para quem é
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Store(Base):
@@ -55,6 +74,7 @@ class Item(Base):
     __tablename__ = "items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str | None] = mapped_column(String(300))
     image_url: Mapped[str | None] = mapped_column(String(2000))
     # Identificadores para achar o mesmo produto em outras lojas
@@ -97,11 +117,12 @@ class Product(Base):
     """Oferta: o produto numa loja específica (link, preço e leitura próprios)."""
 
     __tablename__ = "products"
+    __table_args__ = (UniqueConstraint("item_id", "url"),)  # o mesmo link pode estar em itens de usuários diferentes
 
     id: Mapped[int] = mapped_column(primary_key=True)
     item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
-    url: Mapped[str] = mapped_column(String(2000), unique=True)
+    url: Mapped[str] = mapped_column(String(2000), index=True)
     # Link original colado pelo usuário quando era curto/de afiliado (ex.: meli.la).
     # É usado no "Ver na loja" e, no Mercado Livre, para ler o preço.
     source_url: Mapped[str | None] = mapped_column(String(2000))
@@ -179,6 +200,7 @@ class Rule(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Sem grupos = vale para todos os grupos monitorados
     groups: Mapped[list[TgGroup]] = relationship(secondary=rule_groups, lazy="selectin")
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     # Regra criada a partir de um produto (busca do produto nos grupos do Telegram)
     item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     auto: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # palavra-chave gerada pelo app
@@ -189,6 +211,7 @@ class Alert(Base):
     __tablename__ = "alerts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     source: Mapped[str] = mapped_column(String(16), default="telegram")
     group_title: Mapped[str] = mapped_column(String(255))

@@ -3,7 +3,7 @@
 {% block subtitle %}<p class="sub">Promoções do Telegram e quedas de preço</p>{% endblock %}
 {% block content %}
 {% if not bot_ok %}
-<div class="toast err">{{ icon('alert', 20) }}<span>BOT_TOKEN/CHAT_ID não configurados: os avisos ficam só aqui.</span></div>
+<div class="toast err">{{ icon('alert', 20) }}<span>Seu Telegram não está conectado: os avisos ficam só aqui. <a href="/telegram">Conectar</a></span></div>
 {% endif %}
 <form method="post" action="/alerts/test" class="actions">
   <button class="btn soft">{{ icon('send', 18) }} Enviar teste ao bot</button>

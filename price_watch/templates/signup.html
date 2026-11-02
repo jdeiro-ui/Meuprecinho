@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block body_class %}login-page{% endblock %}
+{% block content %}
+<section class="login">
+  <img src="/static/icons/icon-512.png" alt="" class="login-logo" width="112" height="112">
+  <h1>MeuPrecinho</h1>
+  {% if invite %}
+  <p class="tagline">Você foi convidado(a). Crie sua conta:</p>
+  <form method="post" action="/convite/{{ code }}" class="card">
+    {% if error %}<div class="toast err">{{ error }}</div>{% endif %}
+    <label>Usuário <input name="username" value="{{ username or '' }}" autocomplete="username" autocapitalize="none"
+           pattern="[a-z0-9._-]{3,32}" placeholder="ex.: maria" required></label>
+    <label>Senha (8+ caracteres) <input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+    <label>Repita a senha <input name="password2" type="password" autocomplete="new-password" minlength="8" required></label>
+    <button class="btn primary block">Criar conta</button>
+  </form>
+  {% else %}
+  <p class="tagline">Este convite não vale mais.</p>
+  <div class="card"><p>Peça um novo link para quem te convidou. Se você já tem conta, <a href="/login">entre aqui</a>.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

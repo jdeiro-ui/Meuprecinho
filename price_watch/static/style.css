@@ -336,3 +336,13 @@ label.check input { width: 22px; height: 22px; margin: 0; accent-color: var(--br
 .report li { margin: 3px 0; }
 .offer .chip { vertical-align: middle; margin-left: 4px; font-size: .68rem; padding: 1px 8px; }
 form.actions .btn + .btn { margin-left: 6px; }
+
+/* contas e convites */
+.section-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 24px 4px 4px; }
+.invite-form { display: flex; gap: 8px; align-items: flex-end; }
+.invite-form label { flex: 1; margin: 0; }
+.invites { list-style: none; margin: 12px 0 0; padding: 0; }
+.invites li { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+.invites li form { margin: 0; }
+.invites code { font-size: .72rem; word-break: break-all; }
+.icon-btn.ok { color: var(--ok); background: var(--ok-soft); }

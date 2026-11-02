@@ -1,9 +1,9 @@
-"""Uso: python -m price_watch.cli set-password [usuario]"""
+"""Uso: python -m price_watch.cli set-password [usuario]   (cria ou troca a senha; vira administrador)"""
 
 import getpass
 import sys
 
-from sqlalchemy import delete
+from sqlalchemy import select
 
 from .db import SessionLocal, init_db
 from .models import User
@@ -18,10 +18,14 @@ def set_password(username: str) -> None:
         sys.exit("As senhas não conferem")
     init_db()
     with SessionLocal() as db:
-        db.execute(delete(User))  # app de usuário único
-        db.add(User(username=username, password_hash=hash_password(pw)))
+        user = db.scalar(select(User).where(User.username == username))
+        if user is None:
+            user = User(username=username)
+            db.add(user)
+        user.password_hash = hash_password(pw)
+        user.is_admin = True
         db.commit()
-    print(f"Usuário '{username}' salvo.")
+    print(f"Administrador '{username}' salvo.")
 
 
 def main() -> None:

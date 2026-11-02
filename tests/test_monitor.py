@@ -26,7 +26,7 @@ def test_monitor_le_preco_avisa_queda_e_registra_erros(monkeypatch):
             raise fetcher.FetchError("a loja bloqueou a leitura (HTTP 403)")
         return _page(p)
 
-    async def fake_send(text):
+    async def fake_send(text, **kw):
         sent.append(text)
         return True
 
