@@ -16,7 +16,7 @@ import httpx
 from sqlalchemy import select
 
 from .fetcher import HEADERS
-from .item_rules import keyword_for, match_keyword_for
+from .item_rules import keyword_for, match_keyword_for, variant_conflict, variant_signature
 from .models import Item, Product, Store, utcnow
 from .pricing import Extracted, pack_qty, parse_brl
 from .rules import _keyword_found, normalize
@@ -125,7 +125,8 @@ async def _get(url: str) -> str | None:
 def _matches(item_name: str | None, brand: str | None, title: str, units: int = 1) -> bool:
     keyword = match_keyword_for(item_name, brand)
     return (bool(keyword and _keyword_found(keyword, normalize(title)))
-            and pack_qty(title) == units)  # caixa com 12 não é a unidade avulsa
+            and pack_qty(title) == units  # caixa com 12 não é a unidade avulsa
+            and not variant_conflict(variant_signature(item_name, brand), title))  # Switch 2 ≠ Switch
 
 
 def _queries(item: Item, keyword: str) -> list[str]:
@@ -219,7 +220,9 @@ async def refresh(item_id: int) -> list[tuple[int, Extracted]]:
                 db.commit()
             return []
         # a página do produto pode misturar unidade avulsa e caixa
-        offers = [o for o in parse_product(html) if pack_qty(o.title) == units]
+        sig = variant_signature(name, brand)
+        offers = [o for o in parse_product(html)
+                  if pack_qty(o.title) == units and not variant_conflict(sig, o.title)]
     offers = best_per_seller(offers)
 
     results = []

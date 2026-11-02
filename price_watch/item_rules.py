@@ -110,6 +110,65 @@ def keyword_for(name: str | None, brand: str | None = None) -> str | None:
     return " + ".join(terms)
 
 
+# Modificadores que indicam OUTRO modelo da mesma linha (Switch Lite, iPhone 17 Pro...)
+VARIANTS = {"pro", "max", "plus", "ultra", "mini", "lite", "oled", "slim", "fe", "se", "xl", "edge",
+            "fold", "flip", "paperwhite", "scribe", "colorsoft", "kids", "signature", "digital"}
+
+
+def variant_signature(name: str | None, brand: str | None = None) -> tuple | None:
+    """(linha, número do modelo, modificadores) do produto. Ex.: 'Console Nintendo Switch 2'
+    -> ('switch', '2', set()); 'Apple iPhone 17 Pro 256GB' -> ('iphone', '17', {'pro'})."""
+    if not name:
+        return None
+    tokens = _tokens(name)
+    brand_tokens = set(re.findall(r"[a-z0-9]+", normalize(brand or "")))
+    zone = [t for t in tokens if t not in brand_tokens]
+    while zone and (zone[0] in _CATEGORY or zone[0] in _GENERIC):
+        zone.pop(0)
+    words = [t for t in zone if t.isalpha() and len(t) > 1 and t not in _GENERIC and t not in VARIANTS]
+    if not words:
+        return None
+    line = words[0]
+    i = zone.index(line)
+    nxt = zone[i + 1] if i + 1 < len(zone) else ""
+    number = nxt if nxt.isdigit() and len(nxt) <= 3 else None
+    return line, number, frozenset(t for t in tokens if t in VARIANTS)
+
+
+def variant_conflict(sig: tuple | None, text: str) -> bool:
+    """True se o texto fala de OUTRO modelo da mesma linha (número diferente, falta do
+    número ou modificador que o produto não tem). Sem a linha no texto, não opina."""
+    if not sig:
+        return False
+    line, number, variants = sig
+    toks = _tokens_full(text)
+    positions = [i for i, t in enumerate(toks) if t == line]
+    if not positions:
+        return False
+    for i in positions:
+        after = toks[i + 1:i + 4]
+        nxt = after[0] if after else ""
+        if nxt.isdigit() and len(nxt) <= 3:
+            if nxt != number:
+                return True      # Switch 2 x Switch, iPhone 16 x iPhone 17
+        elif number:
+            return True          # produto é o Switch 2, texto fala só em Switch
+        if any(t in VARIANTS and t not in variants for t in after):
+            return True          # Lite, OLED, Pro, Ultra... que o produto não tem
+    return False
+
+
+def _tokens_full(text: str) -> list[str]:
+    """Como _tokens, mas para textos longos (títulos e mensagens), sem cortar partes."""
+    out: list[str] = []
+    for t in re.findall(r"[a-z0-9]+", normalize(text or "")):
+        if out and out[-1].isdigit() and t in _UNITS:
+            out[-1] += t
+        else:
+            out.append(t)
+    return out
+
+
 def sync(db, item: Item) -> bool:
     """Cria, atualiza ou remove a regra do produto. Devolve True se mudou algo."""
     rule = db.scalar(select(Rule).where(Rule.item_id == item.id))

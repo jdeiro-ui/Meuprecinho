@@ -16,6 +16,7 @@ class RuleSpec:
     item_id: int | None = None  # regra de um produto acompanhado
     units: int = 1              # unidades por embalagem do produto (caixa com 12 = 12)
     user_id: int | None = None  # dono da regra (quem recebe o aviso)
+    variant: tuple | None = None  # (linha, número, modificadores) do produto: Switch ≠ Switch 2
 
 
 def _norm_char(ch: str) -> str:

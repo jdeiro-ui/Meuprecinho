@@ -16,7 +16,7 @@ from sqlalchemy import select
 from . import affiliate, linking, mercadolivre
 from .db import SessionLocal
 from .fetcher import HEADERS
-from .item_rules import keyword_for, match_keyword_for
+from .item_rules import keyword_for, match_keyword_for, variant_conflict, variant_signature
 from .models import Item, Product, Suggestion, utcnow
 from .pricing import normalize_gtin, pack_qty, parse_brl
 from .rules import _keyword_found, normalize
@@ -143,6 +143,8 @@ def match_kind(item: Item, cand: Candidate) -> str | None:
         return "ean"
     if pack_qty(cand.title) != item.units:
         return None  # caixa com 12 não é a unidade avulsa (nem o contrário)
+    if variant_conflict(variant_signature(item.name, item.brand), cand.title):
+        return None  # Switch 2 não é o Switch; iPhone 17 Pro não é o iPhone 17
     model = _alnum(item.model or "")
     if len(model) >= 5 and re.search(r"\d", model) and re.search(r"[a-z]", model) and model in _alnum(cand.title):
         return "modelo"
