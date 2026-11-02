@@ -40,11 +40,19 @@ _NEW_COLUMNS = [
      "UPDATE stores SET fetch_via = 'home' WHERE domain IN ({home})"),
     ("products", "source_url", "VARCHAR(2000)", None),
     ("products", "clicks", "INTEGER NOT NULL DEFAULT 0", None),
+    ("products", "item_id", "INTEGER REFERENCES items(id) ON DELETE CASCADE", None),
 ]
 
 
 _DATA_MIGRATIONS = [
     ("mig_ml_api", "UPDATE stores SET fetch_via = 'api' WHERE domain = 'mercadolivre.com.br'"),
+    # Cada produto antigo vira um item com uma oferta (mesmo id, para manter os links)
+    ("mig_items",
+     "INSERT INTO items (id, name, image_url, target_cents, best_cents, lowest_cents, "
+     "last_notified_cents, active, created_at) "
+     "SELECT id, name, image_url, target_cents, current_cents, lowest_cents, last_notified_cents, "
+     "active, created_at FROM products WHERE item_id IS NULL"),
+    ("mig_items_link", "UPDATE products SET item_id = id WHERE item_id IS NULL"),
 ]
 
 

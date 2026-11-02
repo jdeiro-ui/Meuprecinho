@@ -2,7 +2,7 @@
 {% block heading %}Produtos{% endblock %}
 {% block subtitle %}<p class="sub">Preços acompanhados nas suas lojas</p>{% endblock %}
 {% block content %}
-<details class="card form-card" id="novo" {{ 'open' if prefill or not products }}>
+<details class="card form-card" id="novo" {{ 'open' if prefill or not items }}>
   <summary>{{ icon('plus', 20) }} Adicionar produto</summary>
   <form method="post" action="/products">
     <label>Link do produto
@@ -17,7 +17,7 @@
 <div class="actions split">
   <a href="/stores" class="btn soft">{{ icon('store', 18) }} Lojas</a>
 </div>
-{% for p in products %}{% include "_product_card.html" %}{% else %}
+{% for item in items %}{% include "_product_card.html" %}{% else %}
 <div class="empty">{{ icon('tag', 40) }}<p>Nenhum produto ainda.</p><small>Cole o link de um produto acima para começar.</small></div>
 {% endfor %}
 <p class="disclosure">Os links de compra do MeuPrecinho são links de afiliado: ao comprar por eles, o app pode

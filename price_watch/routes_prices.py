@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Form, Request
 from sqlalchemy import select
 
 from . import affiliate, linking, monitor
-from .models import PricePoint, Product, Store, utcnow
+from .models import Item, PricePoint, Product, Store, utcnow
 from .pricing import find_url, host_of, parse_brl
 from .stores_catalog import BY_DOMAIN, CATALOG
 from .web import DB, Auth, back, flash, render
@@ -18,12 +18,12 @@ READ_MODES = {"http": "HTTP", "browser": "Navegador"}
 FETCH_VIA = {"vm": "Servidor", "home": "Celular de casa", "api": "API oficial (Mercado Livre)"}
 
 
-# ---------- produtos ----------
+# ---------- produtos (itens com ofertas em várias lojas) ----------
 
 @router.get("/products")
 def products(request: Request, db: DB, url: str = ""):
-    items = db.scalars(select(Product).order_by(Product.active.desc(), Product.created_at.desc())).all()
-    return render(request, "products.html", products=items, prefill=url)
+    items = db.scalars(select(Item).order_by(Item.active.desc(), Item.created_at.desc())).all()
+    return render(request, "products.html", items=items, prefill=url)
 
 
 @router.get("/share")
@@ -33,37 +33,78 @@ def share_target(title: str = "", text: str = "", url: str = ""):
     return back(f"/products?url={quote(link, safe='')}#novo")
 
 
+async def _prepare_link(raw: str) -> tuple[str | None, str | None]:
+    """(link limpo do produto, link original se era curto/de afiliado)."""
+    link = find_url(raw)
+    if not link or "." not in host_of(link):
+        return None, None
+    original = link if linking.needs_resolving(link) else None
+    link = (await linking.resolve(link)).split("#")[0]  # links curtos e páginas de afiliado
+    return affiliate.clean_url(link), original  # sem códigos de afiliado/rastreio de terceiros
+
+
+def _start_reading(background: BackgroundTasks, offer: Product) -> None:
+    if offer.store.fetch_via == "home":
+        monitor.request_now(offer.id)
+    else:
+        background.add_task(monitor.check_product, offer.id)  # primeira consulta após responder
+
+
 @router.post("/products")
 async def product_add(request: Request, db: DB, background: BackgroundTasks, url: str = Form(),
                       target: str = Form(""), name: str = Form("")):
-    link = find_url(url)
-    if not link or "." not in host_of(link):
+    link, original = await _prepare_link(url)
+    if not link:
         flash(request, "Cole o link completo do produto (começando com https://)", "err")
         return back("/products")
-    original = link if linking.needs_resolving(link) else None
-    link = (await linking.resolve(link)).split("#")[0]  # links curtos e páginas de afiliado
-    link = affiliate.clean_url(link)  # sem códigos de afiliado/rastreio de terceiros
-    if db.scalar(select(Product).where(Product.url == link)):
+    if existing := db.scalar(select(Product).where(Product.url == link)):
         flash(request, "Esse produto já está na lista", "err")
-        return back("/products")
+        return back(f"/products/{existing.item_id}" if existing.item_id else "/products")
     store = linking.store_for(db, link)
-    p = Product(store=store, url=link, source_url=original, name=name.strip() or None,
-                target_cents=parse_brl(target))
-    db.add(p)
+    item = Item(name=name.strip() or None, target_cents=parse_brl(target))
+    offer = Product(item=item, store=store, url=link, source_url=original)
+    db.add_all([item, offer])
     db.commit()
-    if store.fetch_via == "home":
-        flash(request, f"Produto adicionado em {store.name}. O coletor de casa vai consultar o preço.")
-    else:
-        background.add_task(monitor.check_product, p.id)  # primeira consulta logo após responder
-        flash(request, f"Produto adicionado em {store.name}. Consultando o preço…")
+    _start_reading(background, offer)
+    flash(request, f"Produto adicionado ({store.name}). Consultando o preço…")
     return back("/products")
 
 
-def _chart(points: list[PricePoint], w: int = 320, h: int = 110) -> dict | None:
+@router.post("/products/{item_id}/offers")
+async def offer_add(request: Request, db: DB, background: BackgroundTasks, item_id: int, url: str = Form()):
+    item = db.get(Item, item_id)
+    if item is None:
+        return back("/products")
+    link, original = await _prepare_link(url)
+    if not link:
+        flash(request, "Cole o link completo do produto nessa outra loja", "err")
+        return back(f"/products/{item_id}")
+    if db.scalar(select(Product).where(Product.url == link)):
+        flash(request, "Esse link já está cadastrado", "err")
+        return back(f"/products/{item_id}")
+    store = linking.store_for(db, link)
+    offer = Product(item=item, store=store, url=link, source_url=original, active=item.active)
+    db.add(offer)
+    db.commit()
+    _start_reading(background, offer)
+    flash(request, f"Oferta da {store.name} adicionada. Consultando o preço…")
+    return back(f"/products/{item_id}")
+
+
+def _best_series(points: list[PricePoint]) -> list[int]:
+    """Melhor preço ao longo do tempo, juntando o histórico de todas as lojas."""
+    latest: dict[int, int] = {}
+    series = []
+    for pt in points:  # já em ordem de data
+        latest[pt.product_id] = pt.cents
+        series.append(min(latest.values()))
+    return series
+
+
+def _chart(vals: list[int], w: int = 320, h: int = 110) -> dict | None:
     """Coordenadas de um gráfico de linha simples (SVG) do histórico."""
-    if len(points) < 2:
+    if len(vals) < 2:
         return None
-    vals = [pt.cents for pt in points]
     lo, hi = min(vals), max(vals)
     span = (hi - lo) or 1
     pad = 8
@@ -74,55 +115,81 @@ def _chart(points: list[PricePoint], w: int = 320, h: int = 110) -> dict | None:
     return {"w": w, "h": h, "line": line, "area": area, "lo": lo, "hi": hi, "last": xy[-1]}
 
 
-@router.get("/products/{product_id}")
-def product_detail(request: Request, db: DB, product_id: int):
-    p = db.get(Product, product_id)
-    if p is None:
+@router.get("/products/{item_id}")
+def product_detail(request: Request, db: DB, item_id: int):
+    item = db.get(Item, item_id)
+    if item is None:
         return back("/products")
     since = utcnow() - timedelta(days=180)
-    points = db.scalars(select(PricePoint).where(PricePoint.product_id == p.id, PricePoint.checked_at >= since)
-                        .order_by(PricePoint.checked_at)).all()
-    return render(request, "product_detail.html", p=p, points=list(reversed(points[-30:])), chart=_chart(points))
+    ids = [o.id for o in item.offers]
+    points = db.scalars(select(PricePoint).where(PricePoint.product_id.in_(ids), PricePoint.checked_at >= since)
+                        .order_by(PricePoint.checked_at)).all() if ids else []
+    offers = sorted(item.offers, key=lambda o: (o.current_cents is None or bool(o.last_error)
+                                                or o.available is False, o.current_cents or 0))
+    return render(request, "product_detail.html", item=item, offers=offers, best=item.best_offer(),
+                  points=list(reversed(points[-30:])), chart=_chart(_best_series(points)))
 
 
-@router.post("/products/{product_id}")
-def product_save(request: Request, db: DB, product_id: int, name: str = Form(""), target: str = Form(""),
+@router.post("/products/{item_id}")
+def product_save(request: Request, db: DB, item_id: int, name: str = Form(""), target: str = Form(""),
                  active: bool = Form(False)):
-    p = db.get(Product, product_id)
-    if p is None:
+    item = db.get(Item, item_id)
+    if item is None:
         return back("/products")
-    p.name = name.strip() or p.name
+    item.name = name.strip() or item.name
     new_target = parse_brl(target)
-    if new_target != p.target_cents:
-        p.last_notified_cents = None  # alvo novo: volta a avisar
-    p.target_cents = new_target
-    p.active = active
+    if new_target != item.target_cents:
+        item.last_notified_cents = None  # alvo novo: volta a avisar
+    item.target_cents = new_target
+    item.active = active
+    for offer in item.offers:
+        offer.active = active
     db.commit()
     flash(request, "Produto salvo")
-    return back(f"/products/{product_id}")
+    return back(f"/products/{item_id}")
 
 
-@router.post("/products/{product_id}/check")
-async def product_check(request: Request, db: DB, product_id: int):
-    p = db.get(Product, product_id)
-    if p and p.store.fetch_via == "home":
-        monitor.request_now(product_id)  # o coletor pega na próxima rodada (até 1 min)
-    elif p:
-        await monitor.check_product(product_id)
+@router.post("/products/{item_id}/check")
+async def product_check(request: Request, db: DB, item_id: int):
+    item = db.get(Item, item_id)
+    if item:
+        for offer_id, via in [(o.id, o.store.fetch_via) for o in item.offers]:
+            if via == "home":
+                monitor.request_now(offer_id)  # o coletor pega na próxima rodada (até 1 min)
+            else:
+                await monitor.check_product(offer_id)
     db.expire_all()
-    p = db.get(Product, product_id)
-    if request.headers.get("HX-Request") and p:
-        return render(request, "_product_card.html", p=p)
-    return back(f"/products/{product_id}" if p else "/products")
+    item = db.get(Item, item_id)
+    if request.headers.get("HX-Request") and item:
+        return render(request, "_product_card.html", item=item)
+    return back(f"/products/{item_id}" if item else "/products")
 
 
-@router.post("/products/{product_id}/delete")
-def product_delete(request: Request, db: DB, product_id: int):
-    if p := db.get(Product, product_id):
-        db.delete(p)
+@router.post("/products/{item_id}/delete")
+def product_delete(request: Request, db: DB, item_id: int):
+    if item := db.get(Item, item_id):
+        db.delete(item)
         db.commit()
         flash(request, "Produto removido")
     return back("/products")
+
+
+@router.post("/offers/{offer_id}/delete")
+def offer_delete(request: Request, db: DB, offer_id: int):
+    offer = db.get(Product, offer_id)
+    if offer is None:
+        return back("/products")
+    item_id = offer.item_id
+    db.delete(offer)
+    db.flush()
+    item = db.get(Item, item_id) if item_id else None
+    if item is not None:
+        db.refresh(item)
+        best = item.best_offer()
+        item.best_cents = best.current_cents if best else None
+    db.commit()
+    flash(request, "Oferta removida")
+    return back(f"/products/{item_id}" if item else "/products")
 
 
 # ---------- lojas ----------

@@ -16,6 +16,9 @@ class Extracted:
     name: str | None = None
     image: str | None = None
     available: bool | None = None
+    gtin: str | None = None   # EAN/código de barras
+    brand: str | None = None
+    model: str | None = None
 
 
 # ---------- números ----------
@@ -92,6 +95,31 @@ def _offer_prices(offers) -> tuple[list[int], bool | None]:
     return prices, available
 
 
+def normalize_gtin(value) -> str | None:
+    """EAN/GTIN só com dígitos, sem zeros à esquerda extras (EAN-13 como base)."""
+    digits = re.sub(r"\D", "", str(value or ""))
+    if not 8 <= len(digits) <= 14:
+        return None
+    return digits.lstrip("0").zfill(13) if len(digits) > 8 else digits
+
+
+def _identifiers(d: dict) -> tuple[str | None, str | None, str | None]:
+    gtin = None
+    for key in ("gtin13", "gtin", "gtin12", "gtin14", "gtin8", "ean"):
+        if gtin := normalize_gtin(d.get(key)):
+            break
+    brand = d.get("brand")
+    if isinstance(brand, dict):
+        brand = brand.get("name")
+    if isinstance(brand, list):
+        brand = brand[0] if brand and isinstance(brand[0], str) else None
+    model = d.get("mpn") or d.get("model")
+    if isinstance(model, dict):
+        model = model.get("name")
+    clean = lambda v: " ".join(str(v).split())[:120] if v and isinstance(v, (str, int)) else None  # noqa: E731
+    return gtin, clean(brand), clean(model)
+
+
 def _first_image(img) -> str | None:
     if isinstance(img, str):
         return img
@@ -118,6 +146,7 @@ def _from_jsonld(soup: BeautifulSoup) -> Extracted:
                 out.name = out.name or d.get("name")
                 out.image = out.image or _first_image(d.get("image"))
                 out.available = available
+                out.gtin, out.brand, out.model = _identifiers(d)
                 return out
     return out
 

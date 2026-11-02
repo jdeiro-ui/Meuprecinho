@@ -1,27 +1,29 @@
 {% from "_icons.html" import icon %}
-<article class="card product {{ '' if p.active else 'muted' }}" id="p{{ p.id }}">
-  <a class="product-main" href="/products/{{ p.id }}">
-    {% if p.image_url %}<img src="{{ p.image_url }}" alt="" class="thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.classList.add('broken')">
+{% set best = item.best_offer() %}
+{% set img = item.image_url or (best.image_url if best else none) %}
+<article class="card product {{ '' if item.active else 'muted' }}" id="i{{ item.id }}">
+  <a class="product-main" href="/products/{{ item.id }}">
+    {% if img %}<img src="{{ img }}" alt="" class="thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.classList.add('broken')">
     {% else %}<span class="thumb empty-thumb">{{ icon('tag', 26) }}</span>{% endif %}
     <div class="grow">
-      <strong class="pname">{{ p.name or ('Consultando…' if not p.last_checked_at else 'Produto sem nome') }}</strong>
+      <strong class="pname">{{ item.name or ('Consultando…' if item.offers and not item.offers[0].last_checked_at else 'Produto sem nome') }}</strong>
       <div class="price-row">
-        <span class="price">{{ p.current_cents|brl }}</span>
-        {% if p.lowest_cents and p.current_cents and p.lowest_cents < p.current_cents %}<small>mín. {{ p.lowest_cents|brl }}</small>{% endif %}
+        <span class="price">{{ item.best_cents|brl }}</span>
+        {% if item.lowest_cents and item.best_cents and item.lowest_cents < item.best_cents %}<small>mín. {{ item.lowest_cents|brl }}</small>{% endif %}
       </div>
       <div class="chips">
-        <span class="chip">{{ p.store.name }}</span>
-        {% if p.target_cents %}<span class="chip {{ 'ok' if p.current_cents and p.current_cents <= p.target_cents }}">alvo {{ p.target_cents|brl }}</span>{% endif %}
-        {% if p.available == false %}<span class="chip bad">indisponível</span>{% endif %}
-        {% if p.last_error %}<span class="chip bad" title="{{ p.last_error }}">erro na leitura</span>{% endif %}
-        {% if not p.active %}<span class="chip">pausado</span>{% endif %}
+        {% if best %}<span class="chip">{{ best.store.name }}</span>{% endif %}
+        {% if item.offers|length > 1 %}<span class="chip">{{ item.offers|length }} lojas</span>{% endif %}
+        {% if item.target_cents %}<span class="chip {{ 'ok' if item.best_cents and item.best_cents <= item.target_cents }}">alvo {{ item.target_cents|brl }}</span>{% endif %}
+        {% if not best and item.offers|selectattr('last_error')|list %}<span class="chip bad">erro na leitura</span>{% endif %}
+        {% if not item.active %}<span class="chip">pausado</span>{% endif %}
       </div>
     </div>
   </a>
   <footer class="product-foot">
-    <small>{% if p.last_checked_at %}Consultado {{ p.last_checked_at|ago }}{% if p.store.fetch_via == 'home' %} · via casa{% endif %}
-      {% elif p.store.fetch_via == 'home' %}Na fila do coletor de casa{% else %}Aguardando a primeira consulta{% endif %}</small>
-    <button class="btn soft small" hx-post="/products/{{ p.id }}/check" hx-target="#p{{ p.id }}" hx-swap="outerHTML"
-            hx-indicator="#p{{ p.id }}">{{ icon('refresh', 16) }} Consultar</button>
+    {% set checked = item.offers|selectattr('last_checked_at')|map(attribute='last_checked_at')|list %}
+    <small>{% if checked %}Consultado {{ checked|max|ago }}{% else %}Aguardando a primeira consulta{% endif %}</small>
+    <button class="btn soft small" hx-post="/products/{{ item.id }}/check" hx-target="#i{{ item.id }}" hx-swap="outerHTML"
+            hx-indicator="#i{{ item.id }}">{{ icon('refresh', 16) }} Consultar</button>
   </footer>
 </article>

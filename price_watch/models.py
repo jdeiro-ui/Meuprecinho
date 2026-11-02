@@ -49,10 +49,43 @@ class Store(Base):
     )
 
 
+class Item(Base):
+    """O que o usuário quer comprar (ex.: uma TV). Tem uma oferta por loja (Product)."""
+
+    __tablename__ = "items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str | None] = mapped_column(String(300))
+    image_url: Mapped[str | None] = mapped_column(String(2000))
+    # Identificadores para achar o mesmo produto em outras lojas
+    gtin: Mapped[str | None] = mapped_column(String(20), index=True)  # EAN/código de barras
+    brand: Mapped[str | None] = mapped_column(String(120))
+    model: Mapped[str | None] = mapped_column(String(120))
+    # Valores em centavos, considerando a melhor oferta entre as lojas
+    target_cents: Mapped[int | None] = mapped_column(Integer)
+    best_cents: Mapped[int | None] = mapped_column(Integer)
+    lowest_cents: Mapped[int | None] = mapped_column(Integer)
+    last_notified_cents: Mapped[int | None] = mapped_column(Integer)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    offers: Mapped[list["Product"]] = relationship(
+        back_populates="item", cascade="all, delete-orphan", passive_deletes=True, lazy="selectin"
+    )
+
+    def best_offer(self) -> "Product | None":
+        live = [o for o in self.offers
+                if o.current_cents and o.available is not False and not o.last_error]
+        return min(live, key=lambda o: o.current_cents) if live else None
+
+
 class Product(Base):
+    """Oferta: o produto numa loja específica (link, preço e leitura próprios)."""
+
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
     url: Mapped[str] = mapped_column(String(2000), unique=True)
     # Link original colado pelo usuário quando era curto/de afiliado (ex.: meli.la).
@@ -73,6 +106,7 @@ class Product(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     store: Mapped[Store] = relationship(back_populates="products", lazy="joined")
+    item: Mapped[Item | None] = relationship(back_populates="offers")
 
 
 class PricePoint(Base):

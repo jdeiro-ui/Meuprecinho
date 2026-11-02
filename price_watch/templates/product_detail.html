@@ -1,23 +1,24 @@
 {% extends "base.html" %}
-{% block heading %}{{ p.name or 'Produto' }}{% endblock %}
-{% block subtitle %}<p class="sub"><a href="/products" class="back-link">{{ icon('chevron-left', 16) }} Produtos</a> · {{ p.store.name }}</p>{% endblock %}
+{% block heading %}{{ item.name or 'Produto' }}{% endblock %}
+{% block subtitle %}<p class="sub"><a href="/products" class="back-link">{{ icon('chevron-left', 16) }} Produtos</a>
+  {% if item.brand or item.model %} · {{ item.brand or '' }} {{ item.model or '' }}{% endif %}</p>{% endblock %}
 {% block content %}
+{% set img = item.image_url or (best.image_url if best else none) %}
 <section class="card">
   <div class="detail-head">
-    {% if p.image_url %}<img src="{{ p.image_url }}" alt="" class="thumb big" referrerpolicy="no-referrer" onerror="this.classList.add('broken')">{% endif %}
+    {% if img %}<img src="{{ img }}" alt="" class="thumb big" referrerpolicy="no-referrer" onerror="this.classList.add('broken')">{% endif %}
     <div class="grow">
-      <span class="price big">{{ p.current_cents|brl }}</span>
+      <span class="price big">{{ item.best_cents|brl }}</span>
       <div class="chips">
-        <span class="chip">mín. {{ p.lowest_cents|brl }}</span>
-        {% if p.target_cents %}<span class="chip {{ 'ok' if p.current_cents and p.current_cents <= p.target_cents }}">alvo {{ p.target_cents|brl }}</span>{% endif %}
-        {% if p.available == false %}<span class="chip bad">indisponível</span>{% endif %}
+        {% if best %}<span class="chip ok">melhor: {{ best.store.name }}</span>{% endif %}
+        <span class="chip">mín. {{ item.lowest_cents|brl }}</span>
+        {% if item.target_cents %}<span class="chip {{ 'ok' if item.best_cents and item.best_cents <= item.target_cents }}">alvo {{ item.target_cents|brl }}</span>{% endif %}
       </div>
-      <small>Consultado {{ p.last_checked_at|ago }}{% if p.clicks %} · {{ p.clicks }} clique{{ 's' if p.clicks != 1 }}{% endif %}</small>
+      {% if item.gtin %}<small>EAN {{ item.gtin }}</small>{% endif %}
     </div>
   </div>
-  {% if p.last_error %}<div class="toast err">{{ icon('alert', 20) }}<span>Última leitura falhou: {{ p.last_error }}.</span></div>{% endif %}
   {% if chart %}
-  <svg class="chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" preserveAspectRatio="none" role="img" aria-label="Histórico de preço">
+  <svg class="chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" preserveAspectRatio="none" role="img" aria-label="Histórico do melhor preço">
     <defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1">
       <stop offset="0" stop-color="var(--brand)" stop-opacity=".28"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/>
     </linearGradient></defs>
@@ -27,18 +28,50 @@
   <div class="chart-scale"><small>{{ chart.lo|brl }}</small><small>{{ chart.hi|brl }}</small></div>
   {% endif %}
   <div class="row-actions">
-    <a href="{{ buy_link(p) }}" target="_blank" rel="noopener sponsored" class="btn primary">{{ icon('external', 18) }} Comprar na loja</a>
-    <form method="post" action="/products/{{ p.id }}/check"><button class="btn soft">{{ icon('refresh', 18) }} Consultar</button></form>
+    {% if best %}<a href="{{ buy_link(best) }}" target="_blank" rel="noopener sponsored" class="btn primary">{{ icon('external', 18) }} Comprar na {{ best.store.name }}</a>{% endif %}
+    <form method="post" action="/products/{{ item.id }}/check"><button class="btn soft">{{ icon('refresh', 18) }} Consultar</button></form>
   </div>
+</section>
+
+<section class="card">
+  <h2>Preço por loja</h2>
+  <ul class="offers">
+    {% for o in offers %}
+    <li class="offer {{ 'is-best' if best and o.id == best.id }}">
+      <div class="grow">
+        <strong>{{ o.store.name }}</strong>
+        <small>{% if o.last_error %}<span class="bad">{{ o.last_error }}</span>
+          {% elif o.available == false %}indisponível
+          {% elif o.last_checked_at %}consultado {{ o.last_checked_at|ago }}{% if o.clicks %} · {{ o.clicks }} clique{{ 's' if o.clicks != 1 }}{% endif %}
+          {% else %}aguardando consulta{% endif %}</small>
+      </div>
+      <span class="offer-price">{{ o.current_cents|brl }}</span>
+      <a href="{{ buy_link(o) }}" target="_blank" rel="noopener sponsored" class="icon-btn" aria-label="Comprar na {{ o.store.name }}">{{ icon('external', 18) }}</a>
+      {% if offers|length > 1 %}
+      <form method="post" action="/offers/{{ o.id }}/delete" onsubmit="return confirm('Remover a oferta da {{ o.store.name|e }}?')">
+        <button class="icon-btn danger" aria-label="Remover oferta">{{ icon('x', 18) }}</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  <details class="add-offer">
+    <summary class="link-like">{{ icon('plus', 18) }} Adicionar outra loja</summary>
+    <form method="post" action="/products/{{ item.id }}/offers">
+      <label>Link deste produto em outra loja
+        <input name="url" placeholder="https://www.kabum.com.br/produto/..." inputmode="url" autocapitalize="none" required></label>
+      <button class="btn primary block">Adicionar e consultar</button>
+    </form>
+  </details>
 </section>
 
 <details class="card form-card">
   <summary>{{ icon('edit', 20) }} Editar</summary>
-  <form method="post" action="/products/{{ p.id }}">
-    <label>Nome <input name="name" value="{{ p.name or '' }}"></label>
-    <label>Preço-alvo (vazio = avisar no menor preço já visto)
-      <input name="target" inputmode="decimal" value="{{ (p.target_cents|brl) if p.target_cents else '' }}" placeholder="R$ 1.999,90"></label>
-    <label class="check"><input type="checkbox" name="active" {{ 'checked' if p.active }}> Acompanhar este produto</label>
+  <form method="post" action="/products/{{ item.id }}">
+    <label>Nome <input name="name" value="{{ item.name or '' }}"></label>
+    <label>Preço-alvo, em qualquer loja (vazio = avisar no menor preço já visto)
+      <input name="target" inputmode="decimal" value="{{ (item.target_cents|brl) if item.target_cents else '' }}" placeholder="R$ 1.999,90"></label>
+    <label class="check"><input type="checkbox" name="active" {{ 'checked' if item.active }}> Acompanhar este produto</label>
     <div class="row-actions"><button class="btn primary">Salvar</button></div>
   </form>
 </details>
@@ -47,12 +80,14 @@
 <section class="card">
   <h2>Histórico</h2>
   <ul class="history">
-    {% for pt in points %}<li><span>{{ pt.checked_at|local }}</span><strong>{{ pt.cents|brl }}</strong></li>{% endfor %}
+    {% set names = {} %}
+    {% for o in item.offers %}{% set _ = names.update({o.id: o.store.name}) %}{% endfor %}
+    {% for pt in points %}<li><span>{{ pt.checked_at|local }} · {{ names.get(pt.product_id, '') }}</span><strong>{{ pt.cents|brl }}</strong></li>{% endfor %}
   </ul>
 </section>
 {% endif %}
 
-<form method="post" action="/products/{{ p.id }}/delete" class="actions" onsubmit="return confirm('Remover este produto?')">
+<form method="post" action="/products/{{ item.id }}/delete" class="actions" onsubmit="return confirm('Remover este produto de todas as lojas?')">
   <button class="btn ghost danger-text">Remover produto</button>
 </form>
 {% endblock %}

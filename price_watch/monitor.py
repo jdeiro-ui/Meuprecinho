@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from . import affiliate, fetcher, linking, mercadolivre, notifier
 from .db import SessionLocal
-from .models import Alert, PricePoint, Product, utcnow
+from .models import Alert, Item, PricePoint, Product, utcnow
 from .pricing import extract, format_brl, host_of, should_notify
 
 log = logging.getLogger(__name__)
@@ -208,42 +208,66 @@ async def _finish(product_id: int, ex, error: str | None) -> None:
         log.info("Produto %s: leitura falhou", product_id)  # sem URL nem conteúdo
 
 
+def _ensure_item(db, p: Product) -> Item:
+    """Oferta sem produto (dado antigo ou criado à mão): cria o produto dela."""
+    if p.item is None:
+        p.item = Item(name=p.name, image_url=p.image_url, target_cents=p.target_cents,
+                      last_notified_cents=p.last_notified_cents, active=p.active)
+        db.flush()
+    return p.item
+
+
 def _save_result(product_id: int, ex, error: str | None) -> dict | None:
-    """Grava a leitura e devolve os dados do aviso, se houver."""
+    """Grava a leitura da oferta, recalcula o melhor preço do produto e devolve os
+    dados do aviso, se houver."""
     with SessionLocal() as db:
         p = db.get(Product, product_id)
         if p is None:
             return None
+        item = _ensure_item(db, p)
+        best_before = item.best_cents
         p.last_checked_at = utcnow()
         p.last_error = error
-        if error:
+        if not error:
+            if ex.name and not p.name:
+                p.name = ex.name
+            if ex.image and not p.image_url:
+                p.image_url = ex.image[:2000]
+            p.available = ex.available
+            last_point = db.scalar(select(PricePoint).where(PricePoint.product_id == p.id)
+                                   .order_by(PricePoint.checked_at.desc()).limit(1))
+            if (last_point is None or last_point.cents != ex.price
+                    or _aware(last_point.checked_at) + HISTORY_EVERY <= utcnow()):
+                db.add(PricePoint(product_id=p.id, cents=ex.price))
+            p.current_cents = ex.price
+            p.lowest_cents = min(x for x in (p.lowest_cents, ex.price) if x is not None)
+            # Dados do produto que ainda faltam vêm da primeira loja que os informar
+            item.name = item.name or ex.name
+            item.image_url = item.image_url or (ex.image[:2000] if ex.image else None)
+            item.gtin = item.gtin or getattr(ex, "gtin", None)
+            item.brand = item.brand or getattr(ex, "brand", None)
+            item.model = item.model or getattr(ex, "model", None)
+
+        best = item.best_offer()
+        item.best_cents = best.current_cents if best else None
+        if best is None:
             db.commit()
             return None
-        if ex.name and not p.name:
-            p.name = ex.name
-        if ex.image and not p.image_url:
-            p.image_url = ex.image[:2000]
-        p.available = ex.available
-        old, lowest_before = p.current_cents, p.lowest_cents
-        reason = should_notify(ex.price, ex.available, p.target_cents, lowest_before, p.last_notified_cents)
-
-        last_point = db.scalar(select(PricePoint).where(PricePoint.product_id == p.id)
-                               .order_by(PricePoint.checked_at.desc()).limit(1))
-        if (last_point is None or last_point.cents != ex.price
-                or _aware(last_point.checked_at) + HISTORY_EVERY <= utcnow()):
-            db.add(PricePoint(product_id=p.id, cents=ex.price))
-
-        p.current_cents = ex.price
-        p.lowest_cents = min(x for x in (lowest_before, ex.price) if x is not None)
+        lowest_before = item.lowest_cents
+        reason = should_notify(best.current_cents, True, item.target_cents, lowest_before,
+                               item.last_notified_cents)
+        item.lowest_cents = min(x for x in (lowest_before, best.current_cents) if x is not None)
         if reason:
-            p.last_notified_cents = ex.price
-        elif p.target_cents is not None and ex.price > p.target_cents:
-            p.last_notified_cents = None  # voltou acima do alvo: próxima queda avisa de novo
+            item.last_notified_cents = best.current_cents
+        elif item.target_cents is not None and best.current_cents > item.target_cents:
+            item.last_notified_cents = None  # voltou acima do alvo: próxima queda avisa de novo
         db.commit()
         if not reason:
             return None
-        return {"store": p.store.name, "name": p.name or "Produto", "old": old, "new": ex.price,
-                "target": p.target_cents, "reason": reason, "url": affiliate.buy_url(p.url)}
+        return {"store": best.store.name, "name": item.name or best.name or "Produto",
+                "old": best_before if best_before != best.current_cents else None,
+                "new": best.current_cents, "target": item.target_cents, "reason": reason,
+                "url": affiliate.buy_url(best.url)}
 
 
 def _save_alert(a: dict, ok: bool) -> None:
