@@ -143,6 +143,8 @@ async def check_product(product_id: int) -> None:
 def collector_jobs(limit: int = 5) -> list[dict]:
     """Produtos de lojas "home" na hora de consultar, reservados ao coletor."""
     now = utcnow()
+    if collector["last_seen"] is None:
+        _remember_collector_installed()
     collector["last_seen"] = now
     collector["warned"] = False
     for pid in [k for k, until in _leases.items() if until <= now]:
@@ -181,9 +183,29 @@ def collector_silent_for() -> timedelta | None:
     return None if seen is None else utcnow() - seen
 
 
+def _remember_collector_installed() -> None:
+    """Marca no banco que o coletor já foi instalado (o vigia só avisa depois disso)."""
+    from .models import Setting
+
+    with SessionLocal() as db:
+        if db.get(Setting, "collector_installed") is None:
+            db.add(Setting(key="collector_installed", value="1"))
+            db.commit()
+
+
+def _collector_installed() -> bool:
+    from .models import Setting
+
+    with SessionLocal() as db:
+        return db.get(Setting, "collector_installed") is not None
+
+
 async def collector_watchdog(started_at: datetime) -> None:
-    """Avisa uma vez pelo bot se o coletor sumir e houver produtos esperando por ele."""
-    if collector["warned"] or not await asyncio.to_thread(_has_home_products):
+    """Avisa uma vez pelo bot se o coletor sumir e houver produtos esperando por ele.
+    Não avisa se o coletor nunca foi instalado."""
+    if collector["warned"] or not await asyncio.to_thread(_collector_installed):
+        return
+    if not await asyncio.to_thread(_has_home_products):
         return
     silent = collector_silent_for() or (utcnow() - started_at)
     if silent >= COLLECTOR_SILENT:
@@ -196,8 +218,10 @@ async def collector_watchdog(started_at: datetime) -> None:
 
 
 def _has_home_products() -> bool:
+    """Há ofertas que só o coletor lê? (ofertas "via Zoom" são lidas pelo Zoom)"""
     with SessionLocal() as db:
-        return any(p.store.fetch_via == "home" for p in db.scalars(select(Product).where(Product.active)))
+        return any(p.store.fetch_via == "home" and not p.zoom_oid
+                   for p in db.scalars(select(Product).where(Product.active)))
 
 
 # ---------- processamento comum ----------
