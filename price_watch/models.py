@@ -69,6 +69,9 @@ class Item(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     watch_telegram: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")  # procurar nos grupos
     discovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # busca em lojas
+    discovery_report: Mapped[str | None] = mapped_column(Text)  # resultado da última busca, por loja
+    zoom_url: Mapped[str | None] = mapped_column(String(500))   # página do produto (ou busca) no Zoom
+    zoom_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     offers: Mapped[list["Product"]] = relationship(
@@ -103,6 +106,8 @@ class Product(Base):
     available: Mapped[bool | None] = mapped_column(Boolean)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     clicks: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # cliques em "Comprar"
+    # Oferta lida pelo comparador Zoom (id da oferta lá); o preço vem da página do Zoom
+    zoom_oid: Mapped[str | None] = mapped_column(String(30))
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     last_error: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

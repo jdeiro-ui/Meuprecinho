@@ -26,6 +26,10 @@ transport: httpx.AsyncBaseTransport | None = None  # para testes
 MAX_CANDIDATES = 5
 
 
+class SearchError(Exception):
+    """Falha da busca numa loja (mensagem curta para o relatório)."""
+
+
 @dataclass
 class Candidate:
     store_name: str
@@ -42,15 +46,14 @@ def _client() -> httpx.AsyncClient:
 # ---------- buscas por loja ----------
 
 async def search_americanas(query: str | None = None, ean: str | None = None) -> list[Candidate]:
-    params = {"_from": 0, "_to": MAX_CANDIDATES - 1}
-    if ean:
-        params["fq"] = f"alternateIds_Ean:{ean}"
-    else:
-        params["ft"] = query
+    # A VTEX recusa espaço codificado como "+" (HTTP 400): monta a URL com %20
+    filtro = f"fq=alternateIds_Ean:{ean}" if ean else f"ft={quote(query or '')}"
+    url = ("https://www.americanas.com.br/api/catalog_system/pub/products/search"
+           f"?{filtro}&_from=0&_to={MAX_CANDIDATES - 1}")
     async with _client() as c:
-        r = await c.get("https://www.americanas.com.br/api/catalog_system/pub/products/search", params=params)
+        r = await c.get(url)
     if r.status_code not in (200, 206):
-        return []
+        raise SearchError(f"a loja recusou a busca (HTTP {r.status_code})")
     out = []
     for p in r.json() or []:
         item = (p.get("items") or [{}])[0]
@@ -78,9 +81,11 @@ async def search_kabum(query: str | None = None, ean: str | None = None) -> list
     slug = quote(re.sub(r"\s+", "-", normalize(query)))
     async with _client() as c:
         r = await c.get(f"https://www.kabum.com.br/busca/{slug}")
-    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.S) if r.status_code == 200 else None
+    if r.status_code != 200:
+        raise SearchError(f"a loja recusou a busca (HTTP {r.status_code})")
+    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.S)
     if not m:
-        return []
+        raise SearchError("página de busca sem dados (formato mudou?)")
     try:
         data = json.loads(m.group(1))
     except ValueError:
@@ -99,20 +104,24 @@ async def search_kabum(query: str | None = None, ean: str | None = None) -> list
 
 
 async def search_mercadolivre(query: str | None = None, ean: str | None = None) -> list[Candidate]:
-    if not ean or not mercadolivre.configured() or not mercadolivre.account():
-        return []  # sem EAN o catálogo traz parecidos demais; fica para sugestões futuras
+    if not mercadolivre.configured() or not mercadolivre.account():
+        raise SearchError("conta do Mercado Livre não conectada")
+    if not ean:
+        raise SearchError("só busca por EAN, e este produto ainda não tem EAN")
     try:
         token = await mercadolivre._access_token()
-    except Exception:  # noqa: BLE001
-        return []
+    except Exception as e:  # noqa: BLE001
+        raise SearchError(str(e)[:80]) from e
     async with mercadolivre._client() as c:
         r = await c.get("/products/search", headers={"Authorization": f"Bearer {token}"},
                         params={"status": "active", "site_id": "MLB", "product_identifier": ean})
     if r.status_code != 200:
-        return []
+        raise SearchError(f"a API recusou a busca (HTTP {r.status_code})")
     return [Candidate("Mercado Livre", f"https://www.mercadolivre.com.br/p/{p['id']}", p.get("name") or "",
                       gtin=ean) for p in (r.json().get("results") or [])[:2] if p.get("id")]
 
+
+ZOOM_ENABLED = True
 
 SEARCHERS = {
     "americanas.com.br": search_americanas,
@@ -141,11 +150,24 @@ def match_kind(item: Item, cand: Candidate) -> str | None:
     return None
 
 
-def search_query(item: Item) -> str | None:
+def search_queries(item: Item) -> list[str]:
+    """Termos de busca, do mais completo ao mais curto (algumas lojas tratam várias
+    palavras como "qualquer uma" e trazem produtos parecidos; com menos palavras acertam)."""
+    out = []
     if item.brand and item.model:
-        return f"{item.brand} {item.model}"
+        out.append(f"{item.brand} {item.model}")
     keyword = keyword_for(item.name, item.brand)
-    return keyword.replace(" + ", " ") if keyword else None
+    if keyword:
+        terms = keyword.split(" + ")
+        out.append(" ".join(terms))
+        if len(terms) > 2:
+            out.append(" ".join(terms[:2]))
+    return list(dict.fromkeys(out))
+
+
+def search_query(item: Item) -> str | None:
+    queries = search_queries(item)
+    return queries[0] if queries else None
 
 
 # ---------- orquestração ----------
@@ -163,28 +185,68 @@ def _snapshot(item_id: int):
 
 
 async def discover(item_id: int) -> dict:
-    """Procura o produto nas lojas que ainda não têm oferta dele. Devolve um resumo."""
+    """Procura o produto nas lojas que ainda não têm oferta dele e no Zoom. Guarda um
+    relatório por loja na tela do produto. Devolve um resumo."""
+    from . import zoom
+
     snap = _snapshot(item_id)
-    summary = {"added": [], "suggested": 0}
+    summary = {"added": [], "suggested": 0, "zoom": False}
     if snap is None:
         return summary
     item, have = snap
-    query = search_query(item)
+    queries = search_queries(item)
+    report = [f"Termos da busca: {' / '.join(queries) or '—'}" + (f" · EAN {item.gtin}" if item.gtin else "")]
     for domain, search in SEARCHERS.items():
+        label = domain.split(".")[0].capitalize()
         if domain in have:
+            report.append(f"{label}: já acompanhado")
             continue
-        try:
-            cands = (await search(ean=item.gtin) if item.gtin else []) or await search(query=query)
-        except (httpx.HTTPError, ValueError) as e:
-            log.info("Busca em %s falhou (%s)", domain, type(e).__name__)
+        cands, scored, failure = [], [], None
+        attempts = ([{"ean": item.gtin}] if item.gtin else []) + [{"query": q} for q in queries]
+        for args in attempts:  # para na primeira tentativa que trouxer algo que bate
+            try:
+                found = await search(**args)
+            except SearchError as e:
+                failure = str(e)
+                continue
+            except (httpx.HTTPError, ValueError) as e:
+                failure = f"sem resposta ({type(e).__name__})"
+                continue
+            cands += found
+            scored = [(match_kind(item, c), c) for c in cands]
+            if any(kind for kind, _ in scored):
+                break
+        if not cands and failure:
+            report.append(f"{label}: {failure}")
             continue
-        scored = [(match_kind(item, c), c) for c in cands]
         sure = next((c for kind, c in scored if kind in ("ean", "modelo")), None)
         if sure:
             if _add_offer(item_id, sure):
                 summary["added"].append(sure.store_name)
+                report.append(f"{label}: encontrado pelo {next(k for k, c in scored if c is sure)} ✓")
+            else:
+                report.append(f"{label}: encontrado, mas o link já estava cadastrado")
             continue
-        summary["suggested"] += _suggest(item_id, [c for kind, c in scored if kind == "nome"][:2])
+        names = [c for kind, c in scored if kind == "nome"][:2]
+        n = _suggest(item_id, names)
+        summary["suggested"] += n
+        if n:
+            report.append(f"{label}: {n} sugestão(ões) para confirmar")
+        else:
+            report.append(f"{label}: {len(cands)} resultado(s), nenhum com as palavras do produto")
+
+    zoom_url, zoom_note = (None, "Zoom: desligado") if not ZOOM_ENABLED else await zoom.find(item)
+    report.append(zoom_note)
+    with SessionLocal() as db:
+        it = db.get(Item, item_id)
+        if it is not None:
+            if zoom_url and not it.zoom_url:
+                it.zoom_url = zoom_url
+                summary["zoom"] = True
+            elif it.zoom_url:
+                summary["zoom"] = True
+            it.discovery_report = "\n".join(report)
+            db.commit()
     return summary
 
 

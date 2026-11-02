@@ -43,7 +43,7 @@ def due_product_ids(via: str = "vm", limit: int = BATCH) -> list[int]:
     with SessionLocal() as db:
         items = db.scalars(select(Product).where(Product.active)).all()
         due = [p for p in items
-               if p.store.fetch_via == via
+               if p.store.fetch_via == via and not p.zoom_oid  # ofertas do Zoom: lidas pelo Zoom
                and (p.last_checked_at is None
                     or _aware(p.last_checked_at) + timedelta(minutes=p.store.interval_minutes) <= now)]
         due.sort(key=lambda p: _aware(p.last_checked_at) or now - timedelta(days=3650))
@@ -54,6 +54,21 @@ async def check_due() -> None:
     for via in ("vm", "api"):
         for pid in await asyncio.to_thread(due_product_ids, via):
             await check_product(pid)
+    from . import zoom
+
+    for item_id in await asyncio.to_thread(zoom.due_items):
+        await refresh_zoom(item_id)
+        await asyncio.sleep(DOMAIN_GAP)
+
+
+async def refresh_zoom(item_id: int) -> int:
+    """Atualiza as ofertas "via Zoom" do produto. Devolve quantas lojas vieram."""
+    from . import zoom
+
+    results = await zoom.refresh(item_id)
+    for offer_id, ex in results:
+        await _finish(offer_id, ex, None)
+    return len(results)
 
 
 async def fix_short_link(product_id: int) -> None:
@@ -209,6 +224,8 @@ async def run_discovery(item_id: int) -> dict:
     from . import discovery
 
     summary = await discovery.discover(item_id)
+    if summary.get("zoom"):
+        await refresh_zoom(item_id)
     for offer_id in discovery.take_new_offers():
         with SessionLocal() as db:
             p = db.get(Product, offer_id)

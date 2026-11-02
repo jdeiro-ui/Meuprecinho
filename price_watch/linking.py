@@ -135,3 +135,23 @@ async def ml_offer_from_link(link: str) -> dict | None:
                 return ml_social_offer(await _read(r))
     except httpx.HTTPError:
         return None
+
+
+async def final_store_url(url: str, store_domain: str, max_hops: int = 6) -> str | None:
+    """Segue redirecionamentos (sem abrir a página final) até chegar a um endereço da
+    loja. Usado nas ofertas do Zoom, que passam por links de rastreio."""
+    try:
+        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=False, timeout=10,
+                                     transport=transport) as c:
+            for _ in range(max_hops):
+                host = host_of(url)
+                if host == store_domain or host.endswith("." + store_domain):
+                    return url
+                r = await c.head(url)
+                loc = r.headers.get("location")
+                if r.status_code not in (301, 302, 303, 307, 308) or not loc:
+                    return None
+                url = str(httpx.URL(url).join(loc))
+    except httpx.HTTPError:
+        return None
+    return None

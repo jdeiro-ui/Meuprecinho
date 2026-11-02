@@ -32,14 +32,28 @@ def keyword_for(name: str | None, brand: str | None = None) -> str | None:
     main = _CUT.split(name, maxsplit=1)[0]
     tokens = re.findall(r"[a-z0-9]+", normalize(main))
     brand_n = normalize(brand or "")
-    codes = [t for t in tokens if re.search(r"\d", t) and re.search(r"[a-z]", t)
-             and t not in _GENERIC_CODES][:2]
-    words = [t for t in tokens if t.isalpha() and len(t) > 1 and t not in _GENERIC and t != brand_n]
+
+    def is_code(t: str) -> bool:  # a27, 256gb, qn55qn90 ou número de modelo (iPhone 17)
+        if t in _GENERIC_CODES:
+            return False
+        return bool(re.search(r"\d", t)) and (bool(re.search(r"[a-z]", t)) or len(t) <= 3)
+
+    def is_word(t: str) -> bool:
+        return t.isalpha() and len(t) > 1 and t not in _GENERIC and t != brand_n
+
+    codes = [t for t in tokens if is_code(t)]
     n_words = {0: 3, 1: 2}.get(len(codes), 1)  # menos códigos, mais palavras
-    terms = list(dict.fromkeys(words[:n_words] + codes))
+    terms, words_taken = [], 0
+    for t in tokens:  # na ordem do nome, que é como as promoções costumam escrever
+        if is_word(t) and words_taken < n_words:
+            terms.append(t)
+            words_taken += 1
+        elif is_code(t) and sum(1 for x in terms if is_code(x)) < 2:
+            terms.append(t)
+    terms = list(dict.fromkeys(terms))
     if len(terms) < 2 and brand_n and brand_n not in terms:
         terms.insert(0, brand_n)
-    if len(terms) < 2 and not codes:
+    if len(terms) < 2 and not any(is_code(t) for t in terms):
         return None  # uma palavra só pegaria promoções demais
     return " + ".join(terms)
 

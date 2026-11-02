@@ -45,6 +45,10 @@ _NEW_COLUMNS = [
     ("rules", "auto", "BOOLEAN NOT NULL DEFAULT 0", None),
     ("items", "watch_telegram", "BOOLEAN NOT NULL DEFAULT 1", None),
     ("items", "discovered_at", "DATETIME", None),
+    ("items", "discovery_report", "TEXT", None),
+    ("items", "zoom_url", "VARCHAR(500)", None),
+    ("items", "zoom_checked_at", "DATETIME", None),
+    ("products", "zoom_oid", "VARCHAR(30)", None),
 ]
 
 

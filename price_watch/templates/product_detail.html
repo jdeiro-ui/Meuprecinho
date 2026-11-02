@@ -39,7 +39,7 @@
     {% for o in offers %}
     <li class="offer {{ 'is-best' if best and o.id == best.id }}">
       <div class="grow">
-        <strong>{{ o.store.name }}</strong>
+        <strong>{{ o.store.name }}</strong>{% if o.zoom_oid %} <span class="chip">via Zoom</span>{% endif %}
         <small>{% if o.last_error %}<span class="bad">{{ o.last_error }}</span>
           {% elif o.available == false %}indisponível
           {% elif o.last_checked_at %}consultado {{ o.last_checked_at|ago }}{% if o.clicks %} · {{ o.clicks }} clique{{ 's' if o.clicks != 1 }}{% endif %}
@@ -70,7 +70,14 @@
   {% endif %}
   <form method="post" action="/products/{{ item.id }}/discover" class="actions">
     <button class="btn soft small">{{ icon('search', 16) }} Buscar em outras lojas</button>
+    {% if item.zoom_url %}<a href="{{ item.zoom_url }}" target="_blank" rel="noopener" class="btn ghost small">ver no Zoom</a>{% endif %}
   </form>
+  {% if item.discovery_report %}
+  <details class="report">
+    <summary class="link-like">Resultado da última busca{% if item.discovered_at %} ({{ item.discovered_at|ago }}){% endif %}</summary>
+    <ul>{% for line in item.discovery_report.split('\n') %}<li>{{ line }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
   <details class="add-offer">
     <summary class="link-like">{{ icon('plus', 18) }} Adicionar outra loja</summary>
     <form method="post" action="/products/{{ item.id }}/offers">

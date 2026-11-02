@@ -72,6 +72,13 @@ trecho e link (grupos básicos, que não são supergrupos, não têm link de men
   outras lojas*: Americanas (busca pública VTEX, por EAN ou termo), KaBuM (página de busca) e
   Mercado Livre (catálogo da API, por EAN). EAN ou código de modelo iguais = oferta adicionada;
   só o nome = sugestão para confirmar.
+- **Zoom** (`zoom.py`): a busca também acha o produto no Zoom (página do produto ou busca
+  filtrada); de hora em hora, cada loja de lá vira uma oferta "via Zoom" que conta para o melhor
+  preço e os avisos (inclui lojas que bloqueiam leitura direta, como Magalu e Amazon). Seminovos e
+  usados ficam de fora; lojas já lidas direto têm prioridade. No *Comprar*, ofertas do Zoom na
+  Amazon/Mercado Livre seguem o redirecionamento até a loja e recebem o nosso código de afiliado.
+- **Relatório da busca**: a tela do produto mostra, loja por loja, o que a última busca achou ou
+  por que falhou.
 - **Produto também no Telegram**: cada produto gera uma regra (`item_rules.py`, ex.:
   `galaxy + a27 + 256gb`) com exclusões de acessórios/usados; o aviso do grupo cita o produto,
   o preço da mensagem e se está abaixo do alvo ou melhor que nas lojas.

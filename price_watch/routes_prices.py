@@ -168,7 +168,9 @@ async def product_save(request: Request, db: DB, item_id: int, name: str = Form(
 async def product_check(request: Request, db: DB, item_id: int):
     item = db.get(Item, item_id)
     if item:
-        for offer_id, via in [(o.id, o.store.fetch_via) for o in item.offers]:
+        if item.zoom_url:
+            await monitor.refresh_zoom(item_id)
+        for offer_id, via in [(o.id, o.store.fetch_via) for o in item.offers if not o.zoom_oid]:
             if via == "home":
                 monitor.request_now(offer_id)  # o coletor pega na próxima rodada (até 1 min)
             else:
@@ -188,8 +190,10 @@ async def product_discover(request: Request, item_id: int):
         parts.append("encontrado em " + ", ".join(summary["added"]))
     if summary["suggested"]:
         parts.append(f"{summary['suggested']} sugestão(ões) para você confirmar")
+    if summary.get("zoom"):
+        parts.append("preços do Zoom incluídos")
     flash(request, ("Busca concluída: " + "; ".join(parts)) if parts else
-          "Busca concluída: nenhuma outra loja com este produto por enquanto")
+          "Busca concluída: nada novo. Veja o relatório abaixo do botão.")
     return back(f"/products/{item_id}")
 
 

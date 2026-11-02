@@ -17,3 +17,4 @@ def _sem_busca_real(monkeypatch):
     from price_watch import discovery
 
     monkeypatch.setattr(discovery, "SEARCHERS", {})
+    monkeypatch.setattr(discovery, "ZOOM_ENABLED", False)

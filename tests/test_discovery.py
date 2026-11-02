@@ -60,7 +60,7 @@ def test_busca_adiciona_por_ean_e_sugere_por_nome(lojas, monkeypatch):
         iid = item.id
 
     summary = asyncio.run(monitor.run_discovery(iid))
-    assert summary == {"added": ["Americanas"], "suggested": 1}
+    assert summary == {"added": ["Americanas"], "suggested": 1, "zoom": False}
     with SessionLocal() as db:
         item = db.get(Item, iid)
         assert item.discovered_at is not None
@@ -71,7 +71,10 @@ def test_busca_adiciona_por_ean_e_sugere_por_nome(lojas, monkeypatch):
     assert len(checked) == 1   # a oferta nova da Americanas já foi consultada
 
     # segunda busca não duplica nada
-    assert asyncio.run(monitor.run_discovery(iid)) == {"added": [], "suggested": 0}
+    assert asyncio.run(monitor.run_discovery(iid)) == {"added": [], "suggested": 0, "zoom": False}
+    with SessionLocal() as db:
+        report = db.get(Item, iid).discovery_report
+    assert "Americanas: já acompanhado" in report and "Kabum:" in report
 
 
 def test_tela_mostra_sugestoes_e_confirmar_vira_oferta(lojas, monkeypatch):
