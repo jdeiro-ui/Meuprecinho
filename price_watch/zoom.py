@@ -16,7 +16,8 @@ import httpx
 from sqlalchemy import select
 
 from .fetcher import HEADERS
-from .item_rules import keyword_for, match_keyword_for, variant_conflict, variant_signature
+from .item_rules import (accessory_conflict, keyword_for, match_keyword_for, variant_conflict,
+                         variant_signature)
 from .models import Item, Product, Store, utcnow
 from .pricing import Extracted, pack_qty, parse_brl
 from .rules import _keyword_found, normalize
@@ -126,7 +127,8 @@ def _matches(item_name: str | None, brand: str | None, title: str, units: int = 
     keyword = match_keyword_for(item_name, brand)
     return (bool(keyword and _keyword_found(keyword, normalize(title)))
             and pack_qty(title) == units  # caixa com 12 não é a unidade avulsa
-            and not variant_conflict(variant_signature(item_name, brand), title))  # Switch 2 ≠ Switch
+            and not variant_conflict(variant_signature(item_name, brand), title)  # Switch 2 ≠ Switch
+            and not accessory_conflict(item_name, brand, title))  # jogo/controle para o console
 
 
 def _queries(item: Item, keyword: str) -> list[str]:
@@ -222,12 +224,15 @@ async def refresh(item_id: int) -> list[tuple[int, Extracted]]:
         # a página do produto pode misturar unidade avulsa e caixa
         sig = variant_signature(name, brand)
         offers = [o for o in parse_product(html)
-                  if pack_qty(o.title) == units and not variant_conflict(sig, o.title)]
+                  if pack_qty(o.title) == units and not variant_conflict(sig, o.title)
+                  and not accessory_conflict(name, brand, o.title)]
     offers = best_per_seller(offers)
 
     results = []
     with SessionLocal() as db:
         item = db.get(Item, item_id)
+        offers = _without_outliers(offers, [o.current_cents for o in item.offers
+                                            if not o.zoom_oid and o.current_cents and not o.last_error])
         direct = {o.store_id for o in item.offers if not o.zoom_oid and not o.last_error}
         current = {o.store_id: o for o in item.offers if o.zoom_oid}
         seen = set()
@@ -253,6 +258,27 @@ async def refresh(item_id: int) -> list[tuple[int, Extracted]]:
                 offer.available = False
         db.commit()
     return results
+
+
+OUTLIER_RATIO = 0.6  # Zoom 40% abaixo de todas as outras lojas: provável produto errado
+
+
+def _without_outliers(offers: list[ZoomOffer], direct_prices: list[int]) -> list[ZoomOffer]:
+    """Descarta oferta do Zoom muito abaixo das demais do mesmo produto (provável produto
+    errado: acessório, versão antiga). Precisa de pelo menos 2 preços de referência."""
+    def median(xs: list[int]) -> float:
+        xs = sorted(xs)
+        mid = len(xs) // 2
+        return xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2
+
+    kept = []
+    for o in offers:
+        refs = direct_prices + [x.price for x in offers if x is not o]
+        if len(refs) >= 2 and o.price < OUTLIER_RATIO * median(refs):
+            log.info("Zoom: oferta descartada por preço fora da curva (produto %s)", o.oid)
+            continue
+        kept.append(o)
+    return kept
 
 
 def due_items() -> list[int]:

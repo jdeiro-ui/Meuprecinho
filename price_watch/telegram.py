@@ -22,7 +22,7 @@ from . import notifier
 from .config import get_settings
 from .db import SessionLocal
 from .models import Alert, Item, Rule, SeenMessage, TgGroup, User
-from .item_rules import variant_conflict, variant_signature
+from .item_rules import accessory_conflict, variant_conflict, variant_signature
 from .pricing import format_brl, pack_qty, price_in_text
 from .rules import RuleSpec, match_message, message_link, snippet, split_terms
 
@@ -207,6 +207,8 @@ class TelegramManager:
                     units=r.item.units if r.item else 1,
                     user_id=r.user_id,
                     variant=variant_signature(r.item.name, r.item.brand) if r.item else None,
+                    item_name=r.item.name if r.item else None,
+                    item_brand=r.item.brand if r.item else None,
                 )
                 for r in rules
             ]
@@ -221,7 +223,8 @@ class TelegramManager:
         if any(h.item_id for h in hits):
             qty = pack_qty(text)  # promoção da unidade avulsa não serve para a caixa (e vice-versa)
             hits = [h for h in hits if not h.item_id
-                    or (h.units == qty and not variant_conflict(h.variant, text))]  # Switch 2 ≠ Switch
+                    or (h.units == qty and not variant_conflict(h.variant, text)      # Switch 2 ≠ Switch
+                        and not accessory_conflict(h.item_name, h.item_brand, text))]  # jogo PARA o console
         if not hits:
             return
         if not await asyncio.to_thread(_mark_seen, chat_id, event.id):

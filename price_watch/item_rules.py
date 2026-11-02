@@ -169,6 +169,53 @@ def _tokens_full(text: str) -> list[str]:
     return out
 
 
+# Começos de título que indicam acessório/jogo PARA o produto (não o produto em si)
+_ACCESSORY_HEADS = {
+    "jogo", "game", "games", "controle", "controles", "joystick", "capa", "capinha", "case", "pelicula",
+    "carregador", "cabo", "suporte", "base", "dock", "cartao", "memoria", "headset", "bolsa", "estojo",
+    "skin", "adesivo", "volante", "grip", "protetor", "cooler", "ventoinha", "mochila", "chaveiro",
+    "boneco", "pulseira", "amiibo", "joycon", "joy", "carregadora", "fonte", "teclado", "mouse",
+    "pelicula", "vidro", "lente", "tampa", "alca", "kit",
+}
+# Palavras de chamada de promoção que podem vir antes do produto sem mudar o assunto
+_PROMO = set("""
+oferta ofertas promo promocao precinho achado achadinho baixou relampago hoje agora corre cupom
+frete gratis desconto black friday top menor preco imperdivel urgente alerta novo nova lancamento
+so apenas por de r
+""".split())
+_FOR_RE = re.compile(r"\b(?:para|compativel|compativeis|for)\b|\s-\s|\s–\s")
+
+
+def _is_accessory_text(line: str, text: str) -> bool:
+    t = normalize(text or "")
+    m = re.search(rf"(?<![a-z0-9]){re.escape(line)}(?![a-z0-9])", t)
+    if not m:
+        return False
+    prefix = t[:m.start()]
+    words = re.findall(r"[a-z]+", prefix)
+    if any(w in _ACCESSORY_HEADS for w in words):
+        return True  # "Controle ... Switch 2", "Jogo ... para Switch"
+    sep = _FOR_RE.search(prefix)
+    if sep:
+        before = re.findall(r"[a-z]+", prefix[:sep.start()])
+        if any(len(w) > 2 and w not in _GENERIC and w not in _PROMO and w not in _CATEGORY for w in before):
+            return True  # "Resident Evil Generation Pack - Nintendo Switch 2"
+        if re.search(r"\b(?:para|compativel|compativeis|for)\b", prefix):
+            return True  # "... para Nintendo Switch 2"
+    return False
+
+
+def accessory_conflict(name: str | None, brand: str | None, text: str) -> bool:
+    """True se o texto é de um acessório/jogo PARA o produto acompanhado (ex.: jogo de
+    Switch 2 para quem acompanha o console). Se o próprio produto é um acessório, não opina."""
+    sig = variant_signature(name, brand)
+    if not sig:
+        return False
+    if _is_accessory_text(sig[0], name or ""):
+        return False
+    return _is_accessory_text(sig[0], text)
+
+
 def sync(db, item: Item) -> bool:
     """Cria, atualiza ou remove a regra do produto. Devolve True se mudou algo."""
     rule = db.scalar(select(Rule).where(Rule.item_id == item.id))

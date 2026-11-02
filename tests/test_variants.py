@@ -59,3 +59,36 @@ def test_telegram_promocao_do_switch_2_nao_avisa_o_switch(monkeypatch):
     assert sent == []
     asyncio.run(m._on_message(SimpleNamespace(chat_id=-100777, id=2, raw_text="Nintendo Switch 32GB por R$ 1.799")))
     assert len(sent) == 1
+
+
+from price_watch.item_rules import accessory_conflict  # noqa: E402
+from price_watch import zoom  # noqa: E402
+from price_watch.zoom import ZoomOffer  # noqa: E402
+
+SWITCH2 = ("Console Nintendo Switch 2, Modelo Nacional de Tomada", "Nintendo")
+
+
+@pytest.mark.parametrize("text, accessory", [
+    ("Resident Evil Generation Pack - Nintendo Switch 2", True),
+    ("Controle Pro para Nintendo Switch 2", True),
+    ("Jogo Mario Kart World - Switch 2", True),
+    ("Capa Protetora Switch 2", True),
+    ("Cartão de Memória microSD Express 256GB compatível com Nintendo Switch 2", True),
+    ("Console Switch 2 Preto", False),
+    ("Console Nintendo Switch 2 - Modelo Nacional de Tomada | Bateria de até 9 Horas", False),
+    ("🔥 Oferta - Nintendo Switch 2 por R$ 3.999 no Pix", False),
+    ("Nintendo Switch 2 + Mario Kart World", False),
+])
+def test_jogo_ou_acessorio_para_o_produto(text, accessory):
+    assert accessory_conflict(*SWITCH2, text) is accessory
+
+
+def test_quem_acompanha_acessorio_continua_vendo_acessorio():
+    assert not accessory_conflict("Controle Pro Nintendo Switch 2", "Nintendo", "Controle Pro para Nintendo Switch 2 Preto")
+
+
+def test_zoom_descarta_preco_fora_da_curva():
+    offers = [ZoomOffer("1", "Magalu", "Switch 2", 217535), ZoomOffer("2", "Amazon", "Switch 2", 413969)]
+    kept = zoom._without_outliers(offers, [419900, 449999])
+    assert [o.oid for o in kept] == ["2"]
+    assert len(zoom._without_outliers(offers, [])) == 2   # sem referência suficiente, não descarta
