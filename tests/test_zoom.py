@@ -83,3 +83,44 @@ def test_ofertas_do_zoom_entram_na_comparacao_e_avisam(zoom_net, monkeypatch):
     with SessionLocal() as db:
         assert len([o for o in db.get(Item, iid).offers if o.zoom_oid]) == 2
     assert len(sent) == 1
+
+
+def test_vinculo_errado_com_o_zoom_e_desfeito(monkeypatch):
+    """Kindle ligado por engano à página de um celular (palavras antigas): ao atualizar,
+    o app percebe, desfaz o vínculo e apaga as ofertas erradas."""
+    init_db()
+    rog = _next({"products": {"product": {"product": {"name": "Celular Asus ROG Phone 6 5G 512GB 16 GB"}}},
+                 "offers": {"displayOffers": [
+                     {"id": "77", "name": "Asus ROG Phone 6 512GB", "price": 9600.21, "sellerName": "Magazine Luiza"}]}})
+    monkeypatch.setattr(zoom, "transport", httpx.MockTransport(lambda r: httpx.Response(200, text=rog)))
+    with SessionLocal() as db:
+        magalu = db.query(Store).filter_by(domain="magazineluiza.com.br").first() or \
+            Store(name="Magazine Luiza", domain="magazineluiza.com.br")
+        item = Item(name="Kindle 16 GB (Geração 2024)", zoom_url="https://www.zoom.com.br/celular/rog-phone-6")
+        wrong = Product(item=item, store=magalu, url="https://www.zoom.com.br/lead?oid=77", zoom_oid="77",
+                        current_cents=960021, available=True)
+        db.add_all([item, wrong])
+        db.commit()
+        iid = item.id
+
+    assert asyncio.run(zoom.refresh(iid)) == []
+    with SessionLocal() as db:
+        item = db.get(Item, iid)
+        assert item.zoom_url is None and item.discovered_at is None
+        assert [o for o in item.offers if o.zoom_oid] == []
+
+
+def test_busca_antiga_no_zoom_e_refeita(monkeypatch):
+    init_db()
+    monkeypatch.setattr(zoom, "transport", httpx.MockTransport(lambda r: httpx.Response(200, text=SEARCH)))
+    with SessionLocal() as db:
+        old = Item(name="Kindle 16 GB (Geração 2024)", zoom_url="https://www.zoom.com.br/search?q=16%20gb%206")
+        ok = Item(name="Kindle 16 GB (Geração 2024)", zoom_url="https://www.zoom.com.br/search?q=kindle%2016gb")
+        db.add_all([old, ok])
+        db.commit()
+        old_id, ok_id = old.id, ok.id
+    asyncio.run(zoom.refresh(old_id))
+    asyncio.run(zoom.refresh(ok_id))
+    with SessionLocal() as db:
+        assert db.get(Item, old_id).zoom_url is None                 # palavras antigas: refaz
+        assert db.get(Item, ok_id).zoom_url.endswith("kindle%2016gb")  # atual: mantém

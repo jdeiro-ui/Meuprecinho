@@ -10,7 +10,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import timedelta
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlsplit
 
 import httpx
 from sqlalchemy import select
@@ -89,6 +89,22 @@ def parse_product(html: str) -> list[ZoomOffer]:
             out.append(ZoomOffer(str(o["id"]), o.get("sellerName") or "Loja", o.get("name") or "", price,
                                  o.get("imageUrl")))
     return out
+
+
+def product_name(html: str) -> str | None:
+    """Nome do produto na página de produto do Zoom (para conferir se é o certo)."""
+    st = _state(html) or {}
+    try:
+        return st["products"]["product"]["product"]["name"] or None
+    except (KeyError, TypeError):
+        return None
+
+
+def unlink(db, item: Item) -> None:
+    """Desfaz o vínculo do produto com o Zoom e apaga as ofertas que vieram de lá."""
+    item.zoom_url = None
+    for offer in [o for o in item.offers if o.zoom_oid]:
+        db.delete(offer)
 
 
 def best_per_seller(offers: list[ZoomOffer]) -> list[ZoomOffer]:
@@ -180,8 +196,29 @@ async def refresh(item_id: int) -> list[tuple[int, Extracted]]:
     if html is None:
         return []
     if "/search?" in url:
+        keyword = keyword_for(name, brand)
+        expected = _queries(Item(name=name, brand=brand), keyword) if keyword else []
+        if parse_qs(urlsplit(url).query).get("q", [""])[0] not in expected:
+            # Busca feita com palavras antigas: desfaz para a próxima leitura refazer
+            with SessionLocal() as db:
+                item = db.get(Item, item_id)
+                unlink(db, item)
+                item.discovered_at = None
+                db.commit()
+            return []
         offers = [o for o in parse_search(html)[1] if _matches(name, brand, o.title, units)]
-    else:  # a página do produto pode misturar unidade avulsa e caixa
+    else:
+        page_name = product_name(html)
+        if page_name and not _matches(name, brand, page_name, units):
+            # Vínculo errado (ex.: feito com palavras antigas): desfaz e apaga as ofertas de lá
+            log.info("Zoom: página não corresponde ao produto %s; vínculo desfeito", item_id)
+            with SessionLocal() as db:
+                item = db.get(Item, item_id)
+                unlink(db, item)
+                item.discovered_at = None  # a próxima leitura refaz a busca
+                db.commit()
+            return []
+        # a página do produto pode misturar unidade avulsa e caixa
         offers = [o for o in parse_product(html) if pack_qty(o.title) == units]
     offers = best_per_seller(offers)
 

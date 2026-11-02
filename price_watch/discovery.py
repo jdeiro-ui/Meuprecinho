@@ -243,11 +243,11 @@ async def discover(item_id: int) -> dict:
     with SessionLocal() as db:
         it = db.get(Item, item_id)
         if it is not None:
-            if zoom_url and not it.zoom_url:
+            if ZOOM_ENABLED and zoom_url != it.zoom_url:
+                # Busca refeita: troca o vínculo (o antigo pode ter sido feito com palavras ruins)
+                zoom.unlink(db, it)
                 it.zoom_url = zoom_url
-                summary["zoom"] = True
-            elif it.zoom_url:
-                summary["zoom"] = True
+            summary["zoom"] = bool(it.zoom_url)
             it.discovery_report = "\n".join(report)
             db.commit()
     return summary
