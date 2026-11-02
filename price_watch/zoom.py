@@ -18,7 +18,7 @@ from sqlalchemy import select
 from .fetcher import HEADERS
 from .item_rules import keyword_for, match_keyword_for
 from .models import Item, Product, Store, utcnow
-from .pricing import Extracted, parse_brl
+from .pricing import Extracted, pack_qty, parse_brl
 from .rules import _keyword_found, normalize
 
 log = logging.getLogger(__name__)
@@ -106,9 +106,10 @@ async def _get(url: str) -> str | None:
     return r.text if r.status_code == 200 else None
 
 
-def _matches(item_name: str | None, brand: str | None, title: str) -> bool:
+def _matches(item_name: str | None, brand: str | None, title: str, units: int = 1) -> bool:
     keyword = match_keyword_for(item_name, brand)
-    return bool(keyword and _keyword_found(keyword, normalize(title)))
+    return (bool(keyword and _keyword_found(keyword, normalize(title)))
+            and pack_qty(title) == units)  # caixa com 12 não é a unidade avulsa
 
 
 def _queries(item: Item, keyword: str) -> list[str]:
@@ -137,11 +138,11 @@ async def find(item: Item) -> tuple[str | None, str]:
         products, offers = parse_search(html)
         seen = (seen[0] + len(products), seen[1] + len(offers))
         # Entre os que batem, o de nome mais "enxuto": evita pegar a versão Pro/Max/Plus
-        matching = [p for p in products if _matches(item.name, item.brand, p["name"])]
+        matching = [p for p in products if _matches(item.name, item.brand, p["name"], item.units)]
         if matching:
             p = min(matching, key=lambda p: len(set(re.findall(r"[a-z0-9]+", normalize(p["name"]))) - terms))
             return p["url"], f"Zoom: produto encontrado ({p['name'][:60]})"
-        hits = [o for o in offers if _matches(item.name, item.brand, o.title)]
+        hits = [o for o in offers if _matches(item.name, item.brand, o.title, item.units)]
         if hits and fallback is None:
             fallback = (search_url, len(best_per_seller(hits)))
     if fallback:
@@ -169,7 +170,7 @@ async def refresh(item_id: int) -> list[tuple[int, Extracted]]:
         item = db.get(Item, item_id)
         if item is None or not item.zoom_url:
             return []
-        url, name, brand = item.zoom_url, item.name, item.brand
+        url, name, brand, units = item.zoom_url, item.name, item.brand, item.units
         item.zoom_checked_at = utcnow()
         db.commit()
     try:
@@ -179,9 +180,9 @@ async def refresh(item_id: int) -> list[tuple[int, Extracted]]:
     if html is None:
         return []
     if "/search?" in url:
-        offers = [o for o in parse_search(html)[1] if _matches(name, brand, o.title)]
-    else:
-        offers = parse_product(html)
+        offers = [o for o in parse_search(html)[1] if _matches(name, brand, o.title, units)]
+    else:  # a página do produto pode misturar unidade avulsa e caixa
+        offers = [o for o in parse_product(html) if pack_qty(o.title) == units]
     offers = best_per_seller(offers)
 
     results = []

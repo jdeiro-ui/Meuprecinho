@@ -11,6 +11,8 @@
       <span class="price big">{{ item.best_cents|brl }}</span>
       <div class="chips">
         {% if best %}<span class="chip ok">melhor: {{ best.store.name }}</span>{% endif %}
+        {% if item.units > 1 %}<span class="chip hot">embalagem com {{ item.units }}</span>
+          {% if item.best_cents %}<span class="chip">{{ (item.best_cents // item.units)|brl }} por unidade</span>{% endif %}{% endif %}
         <span class="chip">mín. {{ item.lowest_cents|brl }}</span>
         {% if item.target_cents %}<span class="chip {{ 'ok' if item.best_cents and item.best_cents <= item.target_cents }}">alvo {{ item.target_cents|brl }}</span>{% endif %}
       </div>
@@ -107,6 +109,9 @@
     <label>Nome <input name="name" value="{{ item.name or '' }}"></label>
     <label>Preço-alvo, em qualquer loja (vazio = avisar no menor preço já visto)
       <input name="target" inputmode="decimal" value="{{ (item.target_cents|brl) if item.target_cents else '' }}" placeholder="R$ 1.999,90"></label>
+    <label>Unidades por embalagem
+      <input name="units" inputmode="numeric" value="{{ item.pack_qty or '' }}" placeholder="{{ item.units }} (lido do nome)"></label>
+    <p class="hint">Ex.: 12 para caixa com 12. Lojas, Zoom e promoções só contam com a mesma quantidade.</p>
     <label class="check"><input type="checkbox" name="active" {{ 'checked' if item.active }}> Acompanhar este produto</label>
     <label class="check"><input type="checkbox" name="watch_telegram" {{ 'checked' if item.watch_telegram }}> Procurar também nos grupos do Telegram</label>
     <div class="row-actions"><button class="btn primary">Salvar</button></div>

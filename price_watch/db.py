@@ -47,6 +47,7 @@ _NEW_COLUMNS = [
     ("items", "discovered_at", "DATETIME", None),
     ("items", "discovery_report", "TEXT", None),
     ("items", "zoom_url", "VARCHAR(500)", None),
+    ("items", "pack_qty", "INTEGER", None),
     ("items", "zoom_checked_at", "DATETIME", None),
     ("products", "zoom_oid", "VARCHAR(30)", None),
 ]

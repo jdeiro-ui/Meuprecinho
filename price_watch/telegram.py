@@ -22,7 +22,7 @@ from . import notifier
 from .config import get_settings
 from .db import SessionLocal
 from .models import Alert, Item, Rule, SeenMessage, TgGroup
-from .pricing import format_brl, price_in_text
+from .pricing import format_brl, pack_qty, price_in_text
 from .rules import RuleSpec, match_message, message_link, snippet, split_terms
 
 log = logging.getLogger(__name__)
@@ -200,6 +200,7 @@ class TelegramManager:
                     exclusions=split_terms(r.exclusions),
                     group_ids=frozenset(g.chat_id for g in r.groups),
                     item_id=r.item_id,
+                    units=r.item.units if r.item else 1,
                 )
                 for r in rules
             ]
@@ -211,6 +212,9 @@ class TelegramManager:
             return
         text = event.raw_text or ""
         hits = match_message(text, chat_id, self.rules)
+        if any(h.item_id for h in hits):
+            qty = pack_qty(text)  # promoção da unidade avulsa não serve para a caixa (e vice-versa)
+            hits = [h for h in hits if not h.item_id or h.units == qty]
         if not hits:
             return
         if not await asyncio.to_thread(_mark_seen, chat_id, event.id):

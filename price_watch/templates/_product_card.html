@@ -14,6 +14,7 @@
       <div class="chips">
         {% if best %}<span class="chip">{{ best.store.name }}</span>{% endif %}
         {% if item.offers|length > 1 %}<span class="chip">{{ item.offers|length }} lojas</span>{% endif %}
+        {% if item.units > 1 %}<span class="chip hot">cx {{ item.units }}</span>{% endif %}
         {% if item.target_cents %}<span class="chip {{ 'ok' if item.best_cents and item.best_cents <= item.target_cents }}">alvo {{ item.target_cents|brl }}</span>{% endif %}
         {% if not best and item.offers|selectattr('last_error')|list %}<span class="chip bad">erro na leitura</span>{% endif %}
         {% if not item.active %}<span class="chip">pausado</span>{% endif %}

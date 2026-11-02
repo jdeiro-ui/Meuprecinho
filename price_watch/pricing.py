@@ -252,6 +252,37 @@ def should_notify(new: int | None, available: bool | None, target: int | None,
     return None
 
 
+# ---------- quantidade na embalagem ----------
+
+_PACK_PATTERNS = [
+    # caixa com 12 / cx 12 / display c/ 12 / kit 12 / pack de 6 / fardo com 24
+    r"\b(?:caixa|cx|display|pack|kit|fardo|pacote|combo|cartela)\s*(?:c/|com|de|c\.)?\s*(\d{1,3})\b(?!\s*(?:g|gr|kg|ml|l|mg)\b)",
+    # 12 unidades / 12 un / 12 und / 12 barras / 6 latas
+    r"\b(\d{1,3})\s*(?:unidades|unidade|unid|und|un|barras|barrinhas|latas|garrafas|capsulas|saches|sachês|pacotes|tubos)\b",
+    # c/12 / c/ 12
+    r"\bc/\s*(\d{1,3})\b",
+    # 12 x 30g / 12x40g (quantidade x peso; "12x de R$" de parcelamento não casa)
+    r"\b(\d{1,3})\s*x\s*\d+(?:[.,]\d+)?\s*(?:g|gr|ml|kg|l)\b",
+    # 30g x 12 / 30g c/12
+    r"\d\s*(?:g|gr|ml)\s*x\s*(\d{1,3})\b",
+]
+_PACK_RE = [re.compile(p) for p in _PACK_PATTERNS]
+
+
+def pack_qty(text: str | None) -> int:
+    """Unidades na embalagem a partir do nome ou da mensagem ("Caixa com 12", "12 un",
+    "c/12", "12x30g"). Sem indicação, 1."""
+    from .rules import normalize
+
+    t = normalize(text or "")
+    for rx in _PACK_RE:
+        if m := rx.search(t):
+            n = int(m.group(1))
+            if 2 <= n <= 200:
+                return n
+    return 1
+
+
 # ---------- utilidades ----------
 
 _MSG_PRICE = re.compile(r"R\$\s*(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:,\d{1,2})?)", re.I)

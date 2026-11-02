@@ -15,6 +15,7 @@ rosa verde vermelho vermelha cinza dourado dourada grafite bege lilas roxo amare
 masculino masculina feminino feminina unissex infantil adulto tamanho unidade unidades un pacote
 combo promocao oferta versao modelo produto polegadas pol tela ram memoria interna geracao
 lancamento edicao cm mm sabor sabores caixa contem com bluetooth wireless sem fio
+display pack fardo cartela unidades unidade unid und un barras barrinhas
 """.split())
 # Palavras de categoria: costumam abrir o nome na loja, mas quase nunca na promoção
 _CATEGORY = set("""
@@ -27,7 +28,7 @@ calca vestido perfume shampoo kit conjunto
 _GENERIC_CODES = {"4g", "5g", "4k", "8k", "2k", "hd", "fhd", "uhd", "110v", "127v", "220v",
                   "bivolt", "wifi", "wifi5", "wifi6", "usb", "usbc", "nfc", "lte"}
 # Unidades que se juntam ao número: "16 GB" -> "16gb", "40 g" -> "40g"
-_UNITS = {"gb", "tb", "mb", "l", "ml", "kg", "g", "mg", "w", "v", "mah", "hz", "un"}
+_UNITS = {"gb", "tb", "mb", "l", "ml", "kg", "g", "mg", "w", "v", "mah", "hz"}
 _CUT = re.compile(r" \| |: | - ")  # sufixo da loja e descrições longas depois de ":" ou " - "
 
 # Exclusões padrão: evitam avisos de acessórios e usados do mesmo produto

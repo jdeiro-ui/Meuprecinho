@@ -61,6 +61,8 @@ class Item(Base):
     gtin: Mapped[str | None] = mapped_column(String(20), index=True)  # EAN/código de barras
     brand: Mapped[str | None] = mapped_column(String(120))
     model: Mapped[str | None] = mapped_column(String(120))
+    # Unidades na embalagem (caixa com 12 = 12). Vazio = lido do nome do produto
+    pack_qty: Mapped[int | None] = mapped_column(Integer)
     # Valores em centavos, considerando a melhor oferta entre as lojas
     target_cents: Mapped[int | None] = mapped_column(Integer)
     best_cents: Mapped[int | None] = mapped_column(Integer)
@@ -77,6 +79,13 @@ class Item(Base):
     offers: Mapped[list["Product"]] = relationship(
         back_populates="item", cascade="all, delete-orphan", passive_deletes=True, lazy="selectin"
     )
+
+    @property
+    def units(self) -> int:
+        """Unidades por embalagem (informada ou lida do nome; 1 se não houver)."""
+        from .pricing import pack_qty
+
+        return self.pack_qty or pack_qty(self.name)
 
     def best_offer(self) -> "Product | None":
         live = [o for o in self.offers

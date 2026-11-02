@@ -143,7 +143,7 @@ def product_detail(request: Request, db: DB, item_id: int):
 
 @router.post("/products/{item_id}")
 async def product_save(request: Request, db: DB, item_id: int, name: str = Form(""), target: str = Form(""),
-                       active: bool = Form(False), watch_telegram: bool = Form(False)):
+                       active: bool = Form(False), watch_telegram: bool = Form(False), units: str = Form("")):
     item = db.get(Item, item_id)
     if item is None:
         return back("/products")
@@ -154,12 +154,13 @@ async def product_save(request: Request, db: DB, item_id: int, name: str = Form(
     item.target_cents = new_target
     item.active = active
     item.watch_telegram = watch_telegram
+    digits = "".join(c for c in units if c.isdigit())
+    item.pack_qty = max(1, min(int(digits), 500)) if digits else None  # vazio = lido do nome
     for offer in item.offers:
         offer.active = active
-    rules_changed = item_rules.sync(db, item)
+    item_rules.sync(db, item)
     db.commit()
-    if rules_changed:
-        await asyncio.to_thread(manager.reload)
+    await asyncio.to_thread(manager.reload)  # palavras ou quantidade podem ter mudado
     flash(request, "Produto salvo")
     return back(f"/products/{item_id}")
 

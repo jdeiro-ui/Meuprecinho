@@ -14,6 +14,7 @@ class RuleSpec:
     group_ids: frozenset[int] = field(default_factory=frozenset)  # vazio = todos
     active: bool = True
     item_id: int | None = None  # regra de um produto acompanhado
+    units: int = 1              # unidades por embalagem do produto (caixa com 12 = 12)
 
 
 def _norm_char(ch: str) -> str:

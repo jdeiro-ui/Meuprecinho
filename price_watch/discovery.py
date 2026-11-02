@@ -18,7 +18,7 @@ from .db import SessionLocal
 from .fetcher import HEADERS
 from .item_rules import keyword_for, match_keyword_for
 from .models import Item, Product, Suggestion, utcnow
-from .pricing import normalize_gtin, parse_brl
+from .pricing import normalize_gtin, pack_qty, parse_brl
 from .rules import _keyword_found, normalize
 
 log = logging.getLogger(__name__)
@@ -141,6 +141,8 @@ def match_kind(item: Item, cand: Candidate) -> str | None:
     palavras-chave do produto no título) ou None."""
     if item.gtin and cand.gtin and normalize_gtin(item.gtin) == normalize_gtin(cand.gtin):
         return "ean"
+    if pack_qty(cand.title) != item.units:
+        return None  # caixa com 12 não é a unidade avulsa (nem o contrário)
     model = _alnum(item.model or "")
     if len(model) >= 5 and re.search(r"\d", model) and re.search(r"[a-z]", model) and model in _alnum(cand.title):
         return "modelo"
@@ -179,7 +181,8 @@ def _snapshot(item_id: int):
             return None
         item.discovered_at = utcnow()  # marca já: evita buscas repetidas em paralelo
         have = {o.store.domain for o in item.offers}
-        snap = Item(id=item.id, name=item.name, brand=item.brand, model=item.model, gtin=item.gtin)
+        snap = Item(id=item.id, name=item.name, brand=item.brand, model=item.model, gtin=item.gtin,
+                    pack_qty=item.units)
         db.commit()
         return snap, have
 
