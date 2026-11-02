@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import mercadolivre, monitor, notifier, scheduler
+from . import item_rules, mercadolivre, monitor, notifier, scheduler
 from .config import get_settings
 from .db import init_db
 from .models import Alert, Rule, TgGroup, User
@@ -35,6 +35,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    item_rules.resync_all()  # regras automáticas dos produtos sempre com o gerador atual
     await manager.start()
     scheduler.start()
     yield

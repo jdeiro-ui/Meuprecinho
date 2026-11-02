@@ -16,7 +16,7 @@ from sqlalchemy import select
 from . import affiliate, linking, mercadolivre
 from .db import SessionLocal
 from .fetcher import HEADERS
-from .item_rules import keyword_for
+from .item_rules import keyword_for, match_keyword_for
 from .models import Item, Product, Suggestion, utcnow
 from .pricing import normalize_gtin, parse_brl
 from .rules import _keyword_found, normalize
@@ -144,7 +144,7 @@ def match_kind(item: Item, cand: Candidate) -> str | None:
     model = _alnum(item.model or "")
     if len(model) >= 5 and re.search(r"\d", model) and re.search(r"[a-z]", model) and model in _alnum(cand.title):
         return "modelo"
-    keyword = keyword_for(item.name, item.brand)
+    keyword = match_keyword_for(item.name, item.brand)
     if keyword and _keyword_found(keyword, normalize(cand.title)):
         return "nome"
     return None

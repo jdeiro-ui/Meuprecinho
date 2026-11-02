@@ -16,7 +16,7 @@ import httpx
 from sqlalchemy import select
 
 from .fetcher import HEADERS
-from .item_rules import keyword_for
+from .item_rules import keyword_for, match_keyword_for
 from .models import Item, Product, Store, utcnow
 from .pricing import Extracted, parse_brl
 from .rules import _keyword_found, normalize
@@ -107,30 +107,46 @@ async def _get(url: str) -> str | None:
 
 
 def _matches(item_name: str | None, brand: str | None, title: str) -> bool:
-    keyword = keyword_for(item_name, brand)
+    keyword = match_keyword_for(item_name, brand)
     return bool(keyword and _keyword_found(keyword, normalize(title)))
 
 
+def _queries(item: Item, keyword: str) -> list[str]:
+    terms = keyword.split(" + ")
+    brand = set(re.findall(r"[a-z0-9]+", normalize(item.brand or "")))
+    out = [" ".join(terms), " ".join(t for t in terms if t not in brand), " ".join(terms[:2])]
+    return [q for q in dict.fromkeys(out) if q]
+
+
 async def find(item: Item) -> tuple[str | None, str]:
-    """Página do produto no Zoom (ou busca filtrada). Devolve (url, resumo)."""
+    """Página do produto no Zoom (ou busca filtrada). Tenta termos completos, sem a
+    marca e só os principais. Devolve (url, resumo)."""
     keyword = keyword_for(item.name, item.brand)
     if not keyword:
         return None, "Zoom: sem palavras para buscar"
-    search_url = f"{BASE}/search?q={quote(keyword.replace(' + ', ' '))}"
-    try:
-        html = await _get(search_url)
-    except httpx.HTTPError as e:
-        return None, f"Zoom: sem resposta ({type(e).__name__})"
-    if html is None:
-        return None, "Zoom: busca recusada"
-    products, offers = parse_search(html)
-    for p in products:
-        if _matches(item.name, item.brand, p["name"]):
+    terms = set(keyword.split(" + "))
+    fallback, seen = None, (0, 0)
+    for q in _queries(item, keyword):
+        search_url = f"{BASE}/search?q={quote(q)}"
+        try:
+            html = await _get(search_url)
+        except httpx.HTTPError as e:
+            return None, f"Zoom: sem resposta ({type(e).__name__})"
+        if html is None:
+            return None, "Zoom: busca recusada"
+        products, offers = parse_search(html)
+        seen = (seen[0] + len(products), seen[1] + len(offers))
+        # Entre os que batem, o de nome mais "enxuto": evita pegar a versão Pro/Max/Plus
+        matching = [p for p in products if _matches(item.name, item.brand, p["name"])]
+        if matching:
+            p = min(matching, key=lambda p: len(set(re.findall(r"[a-z0-9]+", normalize(p["name"]))) - terms))
             return p["url"], f"Zoom: produto encontrado ({p['name'][:60]})"
-    hits = [o for o in offers if _matches(item.name, item.brand, o.title)]
-    if hits:
-        return search_url, f"Zoom: {len(best_per_seller(hits))} loja(s) pela busca"
-    return None, f"Zoom: {len(products)} produto(s) e {len(offers)} oferta(s), nenhum igual"
+        hits = [o for o in offers if _matches(item.name, item.brand, o.title)]
+        if hits and fallback is None:
+            fallback = (search_url, len(best_per_seller(hits)))
+    if fallback:
+        return fallback[0], f"Zoom: {fallback[1]} loja(s) pela busca"
+    return None, f"Zoom: {seen[0]} produto(s) e {seen[1]} oferta(s), nenhum igual"
 
 
 def _store_for_seller(db, seller: str) -> Store:

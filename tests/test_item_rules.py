@@ -15,9 +15,18 @@ from price_watch.telegram import GroupInfo, TelegramManager
 @pytest.mark.parametrize("name, brand, expected", [
     ("Smartphone Samsung Galaxy A27 5G 256GB 8GB RAM | Americanas", "Samsung", "galaxy + a27 + 256gb"),
     ("Kit Starlink Mini X, Antena + Roteador, Internet via Satélite", "STARLINK", "starlink + mini"),
-    ("Air Fryer Mondial 4L", "Mondial", "air + fryer + 4l"),
+    ("Air Fryer Mondial 4L", "Mondial", "air + fryer + mondial + 4l"),
+    ("Fritadeira Elétrica Sem Óleo Air Fryer Mondial 4L", "Mondial", "air + fryer + mondial + 4l"),
+    ("Kindle 16 GB (Geração 2024): mais rápido, tela antirreflexo de 6\"", None, "kindle + 16gb"),
+    ("Kindle 16 GB (Geração 2024)", "Amazon", "kindle + 16gb"),
+    ("Barra de Proteína Bold Thin Cookies & Cream 40g", "Bold", "bold + thin + cookies + 40g"),
+    ("Barra de Proteína Bold Thin Cookies & Cream 40g", None, "bold + thin + cookies + 40g"),
+    ("Barra Proteica Bold Brigadeiro 60g", "Bold Snacks", "bold + brigadeiro + 60g"),
+    ("Apple iPhone 17 256GB Preto", "Apple", "apple + iphone + 17 + 256gb"),
+    ("Console PlayStation 5 Slim Digital", "Sony", "playstation + 5 + slim"),
+    ("Micro-ondas Electrolux ME29B 29L 127V", "Electrolux", "me29b + 29l"),
     ("Echo Dot 5ª geração", "Amazon", "echo + dot + 5a"),
-    ("Camiseta Tech Light Insider Masculino", None, "camiseta + tech + light"),
+    ("Camiseta Tech Light Insider Masculino", None, "tech + light + insider"),
     ("Fone", None, None),
     (None, None, None),
 ])
@@ -48,11 +57,11 @@ def test_ciclo_de_vida_da_regra_do_produto():
         assert item_rules.sync(db, item)
         db.commit()
         r = _rule(db, item.id)
-        assert (r.keyword, r.auto, r.active) == ("air + fryer + 4l", True, True)
+        assert (r.keyword, r.auto, r.active) == ("air + fryer + mondial + 4l", True, True)
         assert "capinha" in r.exclusions
 
         item.name = "Air Fryer Mondial 5L"           # nome mudou: palavra acompanha
-        assert item_rules.sync(db, item) and _rule(db, item.id).keyword == "air + fryer + 5l"
+        assert item_rules.sync(db, item) and _rule(db, item.id).keyword == "air + fryer + mondial + 5l"
 
         r = _rule(db, item.id)
         r.keyword, r.auto = "air fryer + mondial", False  # editada à mão: não sobrescreve
@@ -116,3 +125,20 @@ def test_regra_nasce_na_primeira_leitura_e_aviso_do_telegram_compara(monkeypatch
     msg = sent[0]
     assert "Seu produto" in msg and "Galaxy A27" in msg
     assert "R$ 1.799,00" in msg and "abaixo do seu alvo" in msg and "melhor que nas lojas" in msg
+
+
+@pytest.mark.parametrize("keyword, message", [
+    ("kindle + 16gb", "🔥 Kindle 16 GB por R$ 549 no Pix"),
+    ("kindle + 16gb", "Novo Kindle 16GB (2024) R$ 499"),
+    ("bold + thin + cookies + 40g", "Bold Thin Cookies'n Cream 40g caixa com 12"),
+    ("bold + brigadeiro + 60g", "Barrinha BOLD brigadeiro 60 g — R$ 8,90"),
+])
+def test_regras_geradas_casam_com_promocoes_reais(keyword, message):
+    from price_watch.rules import RuleSpec, match_message
+    assert match_message(message, 1, [RuleSpec(1, keyword)])
+
+
+def test_unidade_separada_casa_mas_sabor_errado_nao():
+    from price_watch.rules import RuleSpec, match_message
+    assert not match_message("Bold Thin Brigadeiro 40g", 1, [RuleSpec(1, "bold + thin + cookies + 40g")])
+    assert not match_message("Kindle 32 GB", 1, [RuleSpec(1, "kindle + 16gb")])

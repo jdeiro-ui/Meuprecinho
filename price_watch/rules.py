@@ -49,7 +49,8 @@ def term_pattern(term: str) -> re.Pattern[str]:
     term = normalize(term)
     prefix = term.endswith("*")
     term = term.rstrip("*").strip()
-    body = r"\s+".join(re.escape(w) for w in term.split(" "))
+    # "16gb" também casa com "16 GB" (número e unidade separados por espaço)
+    body = r"\s+".join(re.sub(r"(?<=\d)(?=[a-z])", r"\\s*", re.escape(w)) for w in term.split(" "))
     tail = "" if prefix else r"(?!\w)"
     return re.compile(rf"(?<!\w){body}{tail}")
 
