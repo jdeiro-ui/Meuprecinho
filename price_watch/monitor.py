@@ -201,8 +201,34 @@ async def process_page(product_id: int, html: str | None, error: str | None) -> 
     await _finish(product_id, ex, error)
 
 
+_tasks: set[asyncio.Task] = set()
+
+
+async def run_discovery(item_id: int) -> dict:
+    """Busca o produto em outras lojas e já consulta as ofertas encontradas."""
+    from . import discovery
+
+    summary = await discovery.discover(item_id)
+    for offer_id in discovery.take_new_offers():
+        with SessionLocal() as db:
+            p = db.get(Product, offer_id)
+            via = p.store.fetch_via if p else None
+        if via == "home":
+            request_now(offer_id)
+        elif via:
+            await check_product(offer_id)
+    return summary
+
+
 async def _finish(product_id: int, ex, error: str | None) -> None:
     alert = await asyncio.to_thread(_save_result, product_id, ex, error)
+    if not error:
+        from . import discovery
+
+        if item_id := await asyncio.to_thread(discovery.needs_discovery, product_id):
+            task = asyncio.create_task(run_discovery(item_id))  # em paralelo, sem segurar a leitura
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     if _rules_dirty.is_set():  # regra de produto criada/alterada: listener do Telegram recarrega
         _rules_dirty.clear()
         from .telegram import manager

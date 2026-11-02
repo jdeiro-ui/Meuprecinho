@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from . import affiliate, item_rules, linking, monitor
 from .telegram import manager
-from .models import Item, PricePoint, Product, Rule, Store, utcnow
+from .models import Item, PricePoint, Product, Rule, Store, Suggestion, utcnow
 from .pricing import find_url, host_of, parse_brl
 from .stores_catalog import BY_DOMAIN, CATALOG
 from .web import DB, Auth, back, flash, render
@@ -134,7 +134,10 @@ def product_detail(request: Request, db: DB, item_id: int):
     offers = sorted(item.offers, key=lambda o: (o.current_cents is None or bool(o.last_error)
                                                 or o.available is False, o.current_cents or 0))
     rule = db.scalar(select(Rule).where(Rule.item_id == item.id))
+    suggestions = db.scalars(select(Suggestion).where(Suggestion.item_id == item.id,
+                                                      Suggestion.status == "pending")).all()
     return render(request, "product_detail.html", item=item, offers=offers, best=item.best_offer(), rule=rule,
+                  suggestions=suggestions,
                   points=list(reversed(points[-30:])), chart=_chart(_best_series(points)))
 
 
@@ -175,6 +178,39 @@ async def product_check(request: Request, db: DB, item_id: int):
     if request.headers.get("HX-Request") and item:
         return render(request, "_product_card.html", item=item)
     return back(f"/products/{item_id}" if item else "/products")
+
+
+@router.post("/products/{item_id}/discover")
+async def product_discover(request: Request, item_id: int):
+    summary = await monitor.run_discovery(item_id)
+    parts = []
+    if summary["added"]:
+        parts.append("encontrado em " + ", ".join(summary["added"]))
+    if summary["suggested"]:
+        parts.append(f"{summary['suggested']} sugestão(ões) para você confirmar")
+    flash(request, ("Busca concluída: " + "; ".join(parts)) if parts else
+          "Busca concluída: nenhuma outra loja com este produto por enquanto")
+    return back(f"/products/{item_id}")
+
+
+@router.post("/suggestions/{sug_id}/{action}")
+async def suggestion_answer(request: Request, db: DB, background: BackgroundTasks, sug_id: int, action: str):
+    sug = db.get(Suggestion, sug_id)
+    if sug is None:
+        return back("/products")
+    item_id = sug.item_id
+    if action == "accept" and not db.scalar(select(Product).where(Product.url == sug.url)):
+        item = db.get(Item, item_id)
+        offer = Product(item=item, store=linking.store_for(db, sug.url), url=sug.url, active=item.active)
+        db.add(offer)
+        db.delete(sug)
+        db.commit()
+        _start_reading(background, offer)
+        flash(request, f"Oferta da {offer.store.name} adicionada. Consultando o preço…")
+    else:
+        sug.status = "rejected"  # não sugere de novo
+        db.commit()
+    return back(f"/products/{item_id}")
 
 
 @router.post("/products/{item_id}/delete")

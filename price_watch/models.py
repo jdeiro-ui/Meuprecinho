@@ -111,6 +111,22 @@ class Product(Base):
     item: Mapped[Item | None] = relationship(back_populates="offers")
 
 
+class Suggestion(Base):
+    """Possível oferta do mesmo produto em outra loja, aguardando confirmação."""
+
+    __tablename__ = "suggestions"
+    __table_args__ = (UniqueConstraint("item_id", "url"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
+    url: Mapped[str] = mapped_column(String(2000))
+    store_name: Mapped[str] = mapped_column(String(120))
+    title: Mapped[str] = mapped_column(String(300))
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending | rejected
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class PricePoint(Base):
     __tablename__ = "price_points"
 

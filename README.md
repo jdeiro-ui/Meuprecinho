@@ -66,6 +66,17 @@ trecho e link (grupos básicos, que não são supergrupos, não têm link de men
   `ML_CLIENT_ID`/`ML_CLIENT_SECRET` no `.env`, cadastre no app o endereço de redirecionamento
   mostrado em **Conta → Mercado Livre** e toque em *Conectar*. Os tokens ficam no banco e são
   renovados sozinhos. Funciona com links de anúncio (`MLB-123…`) e de catálogo (`/p/MLB123…`).
+- **Várias lojas por produto**: cada produto (item) tem ofertas em lojas diferentes; o alvo vale
+  para o melhor preço entre elas e o aviso diz em qual loja está. *Adicionar outra loja* à mão ou
+  pela **busca automática** (`discovery.py`), que roda na 1ª leitura e pelo botão *Buscar em
+  outras lojas*: Americanas (busca pública VTEX, por EAN ou termo), KaBuM (página de busca) e
+  Mercado Livre (catálogo da API, por EAN). EAN ou código de modelo iguais = oferta adicionada;
+  só o nome = sugestão para confirmar.
+- **Produto também no Telegram**: cada produto gera uma regra (`item_rules.py`, ex.:
+  `galaxy + a27 + 256gb`) com exclusões de acessórios/usados; o aviso do grupo cita o produto,
+  o preço da mensagem e se está abaixo do alvo ou melhor que nas lojas.
+- **Links de compra**: guardados limpos e gerados com o código de afiliado do app
+  (`AMAZON_TAG`, `ML_MATT_WORD`/`ML_MATT_TOOL`) no botão *Comprar* (`/r/<id>`, conta cliques).
 - **Modo Navegador (opcional)**: para sites que só mostram o preço com JavaScript. Pesa na VM
   pequena; antes, crie um swap de 2 GB:
   ```bash
@@ -92,6 +103,8 @@ pytest -q
 - `tests/test_monitor.py`: consulta de ponta a ponta com loja falsa (histórico, aviso único,
   erros de leitura).
 - `tests/test_login.py`: bloqueio após senhas erradas.
+- `tests/test_multistore.py`, `tests/test_discovery.py`, `tests/test_item_rules.py`: várias
+  lojas por produto, busca automática e regra do produto no Telegram.
 
 Teste manual ponta a ponta: pareie a conta, marque um grupo seu, crie uma regra
 (ex.: `teste123`) e mande essa palavra no grupo a partir de outra conta. O aviso chega

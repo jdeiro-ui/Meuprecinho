@@ -55,6 +55,22 @@
     </li>
     {% endfor %}
   </ul>
+  {% if suggestions %}
+  <div class="suggestions">
+    <p class="hint"><b>Também encontramos.</b> É o mesmo produto?</p>
+    {% for sg in suggestions %}
+    <div class="suggestion">
+      <div class="grow"><strong>{{ sg.store_name }}</strong><small>{{ sg.title }}</small></div>
+      {% if sg.price_cents %}<span class="offer-price">{{ sg.price_cents|brl }}</span>{% endif %}
+      <form method="post" action="/suggestions/{{ sg.id }}/accept"><button class="icon-btn ok" aria-label="Sim, é este">{{ icon('check', 18) }}</button></form>
+      <form method="post" action="/suggestions/{{ sg.id }}/reject"><button class="icon-btn danger" aria-label="Não é este">{{ icon('x', 18) }}</button></form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <form method="post" action="/products/{{ item.id }}/discover" class="actions">
+    <button class="btn soft small">{{ icon('search', 16) }} Buscar em outras lojas</button>
+  </form>
   <details class="add-offer">
     <summary class="link-like">{{ icon('plus', 18) }} Adicionar outra loja</summary>
     <form method="post" action="/products/{{ item.id }}/offers">
