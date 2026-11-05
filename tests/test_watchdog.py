@@ -7,11 +7,11 @@ from price_watch.models import Item, Product, Setting, Store, utcnow
 
 
 def _run(monkeypatch, sent):
-    async def fake_send(text, **kw):
-        sent.append(text)
+    async def fake_deliver(user_id, html, **kw):
+        sent.append(html)
         return True
 
-    monkeypatch.setattr(notifier, "send", fake_send)
+    monkeypatch.setattr(notifier, "deliver", fake_deliver)
     monitor.collector.update(last_seen=None, warned=False)
     asyncio.run(monitor.collector_watchdog(utcnow() - timedelta(hours=2)))
 

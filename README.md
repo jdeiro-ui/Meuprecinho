@@ -55,6 +55,15 @@ trecho e link (grupos básicos, que não são supergrupos, não têm link de men
   produtos, regras e avisos; os grupos lidos são os do administrador, e cada mensagem é cruzada com
   as regras de todos, com um aviso por pessoa. Sem Telegram conectado, o aviso fica só no app.
 - O `CHAT_ID` do `.env` vira a conversa do administrador na primeira inicialização.
+- **Onde receber** (*Conta*): **App** (notificação do celular via Web Push, `push.py`; padrão de
+  contas novas), **Telegram** ou **Ambos**. "Ativar neste celular" registra o aparelho; chaves VAPID
+  geradas e guardadas no banco (`VAPID_SUBJECT` opcional no `.env`). Requer `pip install -r
+  requirements.txt` (pywebpush) e HTTPS.
+- **Teto nas promoções dos grupos**: regra de produto avisa só até o preço-alvo; regra manual tem
+  "avisar só até R$". Mensagem sem preço avisa, marcando "preço não informado". O preço da mensagem
+  ignora parcela, cupom, "R$ X OFF", cashback, economia e frete.
+- **Sem repetidas**: a mesma promoção (mesmo produto/regra) em outros grupos nas últimas 24 h não
+  avisa de novo, salvo se o preço cair 1% ou mais; a tela Avisos mostra "também em: …".
 
 ## Preços (fase 3)
 

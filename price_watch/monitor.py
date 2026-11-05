@@ -211,10 +211,10 @@ async def collector_watchdog(started_at: datetime) -> None:
     if silent >= COLLECTOR_SILENT:
         collector["warned"] = True
         mins = int(silent.total_seconds() // 60)
-        await notifier.send(f"⚠️ <b>Coletor de casa sem contato há {mins} min.</b>\n"
-                            "Os preços das lojas lidas pelo celular estão parados. "
-                            "Confira se o Termux continua aberto no celular.",
-                            chat_id=await asyncio.to_thread(notifier.admin_chat))
+        msg = "Os preços das lojas lidas pelo celular estão parados. Confira se o Termux continua aberto."
+        await notifier.deliver(await asyncio.to_thread(notifier.admin_user_id),
+                               f"⚠️ <b>Coletor de casa sem contato há {mins} min.</b>\n{msg}",
+                               title=f"⚠️ Coletor sem contato há {mins} min", body=msg, url="/telegram#coletor")
 
 
 def _has_home_products() -> bool:
@@ -278,8 +278,12 @@ async def _finish(product_id: int, ex, error: str | None) -> None:
 
         await asyncio.to_thread(manager.reload)
     if alert:
-        user_id, chat_id = alert.pop("user_id"), alert.pop("chat_id")
-        ok = await notifier.send(notifier.format_price_alert(**alert), chat_id=chat_id)
+        user_id, item_id = alert.pop("user_id"), alert.pop("item_id")
+        alert.pop("chat_id", None)
+        ok = await notifier.deliver(
+            user_id, notifier.format_price_alert(**alert),
+            title=f"💰 {alert['name'][:70]}: {format_brl(alert['new'])}",
+            body=f"{alert['store']} · {alert['reason']}", url=f"/products/{item_id}", tag=f"price:{item_id}")
         await asyncio.to_thread(_save_alert, alert, ok, user_id)
     if error:
         log.info("Produto %s: leitura falhou", product_id)  # sem URL nem conteúdo
@@ -344,7 +348,7 @@ def _save_result(product_id: int, ex, error: str | None) -> dict | None:
         if not reason:
             return None
         owner = db.get(User, item.user_id) if item.user_id else None
-        return {"user_id": item.user_id, "chat_id": owner.telegram_chat_id if owner else None,
+        return {"user_id": item.user_id, "item_id": item.id, "chat_id": owner.telegram_chat_id if owner else None,
                 "store": best.store.name, "name": item.name or best.name or "Produto",
                 "old": best_before if best_before != best.current_cents else None,
                 "new": best.current_cents, "target": item.target_cents, "reason": reason,

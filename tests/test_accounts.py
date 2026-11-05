@@ -19,6 +19,7 @@ def _user(name, admin=False, chat=None):
             u = User(username=name, password_hash=hash_password("senha-" + name), is_admin=admin)
             db.add(u)
         u.telegram_chat_id = chat
+        u.notify_channel = "telegram" if chat else "app"
         db.commit()
         return u.id
 
@@ -115,7 +116,7 @@ def test_promocao_e_queda_de_preco_vao_para_a_conversa_de_cada_um(monkeypatch):
     m.reload()
     m.groups = {-100900: GroupInfo("Promos", "promos")}
     asyncio.run(m._on_message(SimpleNamespace(chat_id=-100900, id=5, raw_text="PS5 Slim por R$ 3.299")))
-    assert sorted(str(chat) for chat, _ in sent) == ["1001", "1002", "None"]  # ninguém recebe o de outro
+    assert sorted(str(chat) for chat, _ in sent) == ["1001", "1002"]  # ninguém recebe o de outro
     with SessionLocal() as db:
         assert db.query(Alert).filter_by(user_id=c, delivered=False).count() == 1  # fica no app da Fabi
 

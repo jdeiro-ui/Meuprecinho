@@ -32,7 +32,23 @@ class User(Base):
     # Conversa do usuário com o bot (avisos); preenchida ao tocar no link t.me/<bot>?start=<token>
     telegram_chat_id: Mapped[str | None] = mapped_column(String(32))
     tg_link_token: Mapped[str | None] = mapped_column(String(48), index=True)
+    # Onde chegam os avisos: "app" (notificação do celular), "telegram" ou "both"
+    notify_channel: Mapped[str] = mapped_column(String(10), default="app", server_default="app")
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PushSubscription(Base):
+    """Aparelho em que o usuário ativou as notificações do app (Web Push)."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Invite(Base):

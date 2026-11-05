@@ -58,6 +58,38 @@ def format_price_alert(store: str, name: str, old: int | None, new: int, target:
     return "\n".join(parts)
 
 
+async def deliver(user_id: int | None, telegram_html: str, title: str, body: str,
+                  url: str = "/alerts", tag: str | None = None) -> bool:
+    """Envia o aviso pelo canal que o usuário escolheu (app, Telegram ou ambos).
+    True se chegou por pelo menos um canal."""
+    from .db import SessionLocal
+    from .models import User
+    from . import push
+
+    if user_id is None:
+        return await send(telegram_html)
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        channel = (user.notify_channel if user else None) or "app"
+        chat = user.telegram_chat_id if user else None
+    ok = False
+    if channel in ("telegram", "both") and chat:
+        ok = await send(telegram_html, chat_id=chat) or ok
+    if channel in ("app", "both"):
+        ok = await push.send_to_user(user_id, title, body, url, tag) or ok
+    return ok
+
+
+def admin_user_id() -> int | None:
+    from sqlalchemy import select
+
+    from .db import SessionLocal
+    from .models import User
+
+    with SessionLocal() as db:
+        return db.scalar(select(User.id).where(User.is_admin).order_by(User.id))
+
+
 def admin_chat() -> str | None:
     """Conversa do administrador (avisos técnicos, ex.: coletor parado)."""
     from sqlalchemy import select

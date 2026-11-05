@@ -7,16 +7,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import bot, item_rules, mercadolivre, monitor, notifier, scheduler
+from . import bot, item_rules, mercadolivre, monitor, notifier, push, scheduler
 from .config import get_settings
 from .db import init_db
-from .models import Alert, Invite, Rule, TgGroup, User, utcnow
+from .models import Alert, Invite, PushSubscription, Rule, TgGroup, User, utcnow
 from .routes_collector import collector_token
 from .routes_collector import router as collector_router
 from .routes_prices import router as prices_router
@@ -168,28 +168,81 @@ def home():
 
 # ---------- avisos ----------
 
+def _can_notify(me: User) -> bool:
+    """O usuário tem por onde receber, no canal que escolheu?"""
+    by_app = me.notify_channel in ("app", "both") and bool(push.subscriptions(me.id))
+    by_tg = me.notify_channel in ("telegram", "both") and bool(me.telegram_chat_id)
+    return by_app or by_tg
+
+
 @app.get("/alerts")
 def alerts(request: Request, db: DB, me: Me):
     items = db.scalars(select(Alert).where(Alert.user_id == me.id)
                        .order_by(Alert.created_at.desc()).limit(100)).all()
-    return render(request, "alerts.html", alerts=items, bot_ok=bool(me.telegram_chat_id))
+    return render(request, "alerts.html", alerts=items, bot_ok=_can_notify(me))
 
 
 @app.post("/alerts/test")
 async def alerts_test(request: Request, me: Me):
-    if not me.telegram_chat_id:
-        flash(request, "Conecte o Telegram na aba Conta para receber os avisos", "err")
+    if not _can_notify(me):
+        flash(request, "Ative as notificações (ou conecte o Telegram) na aba Conta", "err")
         return back("/telegram")
-    ok = await notifier.send("✅ MeuPrecinho: teste de aviso", chat_id=me.telegram_chat_id)
+    ok = await notifier.deliver(me.id, "✅ MeuPrecinho: teste de aviso", title="✅ MeuPrecinho",
+                                body="Teste de aviso: está tudo certo!", url="/alerts", tag="teste")
     if ok:
-        flash(request, "Mensagem de teste enviada")
+        flash(request, "Aviso de teste enviado")
     else:
         hint = {"Unauthorized": "BOT_TOKEN inválido",
                 "Bad Request: chat not found": "conversa com o bot não encontrada; conecte de novo na aba Conta",
                 "Forbidden: bot was blocked by the user": "o bot está bloqueado; desbloqueie e toque em Iniciar"}
-        why = notifier.last_error or "veja BOT_TOKEN/CHAT_ID"
+        why = notifier.last_error or "nenhum aparelho recebeu"
         flash(request, f"Falha ao enviar: {hint.get(why, why)}", "err")
     return back("/alerts")
+
+
+# ---------- notificações do app (Web Push) ----------
+
+@app.get("/push/key", dependencies=[Auth])
+def push_key():
+    if not push.available():
+        return JSONResponse({"error": "notificações indisponíveis no servidor"}, status_code=503)
+    return {"key": push.public_key()}
+
+
+@app.post("/push/subscribe")
+async def push_subscribe(request: Request, db: DB, me: Me):
+    data = await request.json()
+    endpoint = str(data.get("endpoint") or "")
+    keys = data.get("keys") or {}
+    if not endpoint.startswith("https://") or not keys.get("p256dh") or not keys.get("auth"):
+        return JSONResponse({"ok": False}, status_code=400)
+    sub = db.scalar(select(PushSubscription).where(PushSubscription.endpoint == endpoint))
+    if sub is None:
+        sub = PushSubscription(endpoint=endpoint[:1000])
+        db.add(sub)
+    sub.user_id, sub.p256dh, sub.auth = me.id, str(keys["p256dh"])[:200], str(keys["auth"])[:100]
+    db.commit()
+    push.remember_app_url(_base(request))
+    return {"ok": True}
+
+
+@app.post("/push/unsubscribe")
+async def push_unsubscribe(request: Request, db: DB, me: Me):
+    endpoint = str((await request.json()).get("endpoint") or "")
+    db.execute(delete(PushSubscription).where(PushSubscription.endpoint == endpoint,
+                                              PushSubscription.user_id == me.id))
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/conta/notificacoes")
+def account_channel(request: Request, db: DB, me: Me, channel: str = Form()):
+    if channel in ("app", "telegram", "both"):
+        me.notify_channel = channel
+        db.commit()
+        flash(request, {"app": "Avisos pelo app", "telegram": "Avisos pelo Telegram",
+                        "both": "Avisos pelo app e pelo Telegram"}[channel])
+    return back("/telegram#notificacoes")
 
 
 # ---------- grupos ----------
@@ -304,7 +357,8 @@ def _base(request: Request) -> str:
 
 @app.get("/telegram")
 async def telegram_page(request: Request, db: DB, me: Me):
-    ctx = {"bot_link": await bot.connect_link(me.id) if not me.telegram_chat_id else None}
+    ctx = {"bot_link": await bot.connect_link(me.id) if not me.telegram_chat_id else None,
+           "devices": len(push.subscriptions(me.id)), "push_ok": push.available()}
     if me.is_admin:
         base = _base(request)
         token = collector_token()

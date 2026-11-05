@@ -346,3 +346,10 @@ form.actions .btn + .btn { margin-left: 6px; }
 .invites li form { margin: 0; }
 .invites code { font-size: .72rem; word-break: break-all; }
 .icon-btn.ok { color: var(--ok); background: var(--ok-soft); }
+
+/* canal dos avisos */
+.channel-pick { display: flex; gap: 8px; margin: 8px 0 4px; }
+.channel-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.channel-box p { margin: 0 0 6px; }
+
+[hidden] { display: none !important; }  /* botões com display próprio também somem */

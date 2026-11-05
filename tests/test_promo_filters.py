@@ -44,7 +44,8 @@ def env(monkeypatch):
         db.query(Alert).delete()
         db.query(Rule).delete()
         u = db.query(User).filter_by(username="teto").first() or \
-            User(username="teto", password_hash=hash_password("senha-teto-1"), telegram_chat_id="77")
+            User(username="teto", password_hash=hash_password("senha-teto-1"), telegram_chat_id="77",
+                 notify_channel="telegram")
         db.add(u)
         db.flush()
         db.query(Item).filter_by(user_id=u.id).delete()

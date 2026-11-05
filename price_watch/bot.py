@@ -64,6 +64,8 @@ def handle_text(chat_id: str, text: str) -> str | None:
             for other in db.scalars(select(User).where(User.telegram_chat_id == chat_id, User.id != user.id)):
                 other.telegram_chat_id = None  # uma conversa pertence a uma conta só
             user.telegram_chat_id, user.tg_link_token = chat_id, None
+            if user.notify_channel == "app":
+                user.notify_channel = "both"  # conectou o bot: passa a receber também por lá
             db.commit()
             return (f"✅ Pronto, <b>{user.username}</b>! Seus avisos do MeuPrecinho vão chegar aqui.\n"
                     "Para parar, envie /parar.")

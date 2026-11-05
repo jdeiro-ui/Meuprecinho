@@ -61,6 +61,7 @@ _NEW_COLUMNS = [
     ("alerts", "dedup_key", "VARCHAR(40)", None),
     ("alerts", "price_cents", "INTEGER", None),
     ("alerts", "also_in", "TEXT", None),
+    ("users", "notify_channel", "VARCHAR(10) NOT NULL DEFAULT 'app'", None),
 ]
 
 
@@ -78,6 +79,8 @@ _DATA_MIGRATIONS = [
     ("mig_owner_items", "UPDATE items SET user_id = (SELECT MIN(id) FROM users) WHERE user_id IS NULL"),
     ("mig_owner_rules", "UPDATE rules SET user_id = (SELECT MIN(id) FROM users) WHERE user_id IS NULL"),
     ("mig_owner_alerts", "UPDATE alerts SET user_id = (SELECT MIN(id) FROM users) WHERE user_id IS NULL"),
+    # Notificação do app: quem já recebia pelo Telegram continua recebendo por lá
+    ("mig_channel", "UPDATE users SET notify_channel = 'telegram' WHERE telegram_chat_id IS NOT NULL"),
 ]
 
 

@@ -251,13 +251,22 @@ class TelegramManager:
                 extra.append("💬 Preço não informado na mensagem")
             if isinstance(previous, int):
                 extra.append(f"📉 Baixou de novo: antes {format_brl(previous)}")
-            chat = getattr(self, "user_chats", {}).get(user_id)
-            ok = await notifier.send(notifier.format_alert(group.title, keywords, trecho, link, extra or None),
-                                     chat_id=chat)
+            subject = await asyncio.to_thread(_item_name, item_ids[0]) if item_ids else keywords[0]
+            title = f"🔔 {subject}" + (f" · {format_brl(msg_price)}" if msg_price else "")
+            # Ao tocar: post do canal (se público, abre para qualquer um) ou a tela Avisos
+            url = link if (link and group.username) else "/alerts"
+            ok = await notifier.deliver(user_id, notifier.format_alert(group.title, keywords, trecho, link, extra or None),
+                                        title=title, body=f"{group.title}: {trecho}", url=url, tag=key)
             await asyncio.to_thread(_save_alert, group.title, keywords, trecho, link, ok, user_id, key, msg_price)
 
 
 DEDUP_WINDOW = timedelta(hours=24)
+
+
+def _item_name(item_id: int) -> str:
+    with SessionLocal() as db:
+        item = db.get(Item, item_id)
+        return (item.name if item and item.name else "Seu produto")[:80]
 
 
 def repeated_promo(user_id: int | None, key: str, price: int | None, group_title: str):

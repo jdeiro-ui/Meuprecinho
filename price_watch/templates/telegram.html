@@ -2,20 +2,50 @@
 {% block heading %}Conta{% endblock %}
 {% block subtitle %}<p class="sub">{{ me.username }}{% if me.is_admin %} · administrador{% endif %}</p>{% endblock %}
 {% block content %}
-<section class="card" id="avisos">
-  <h2>Avisos no Telegram</h2>
-  {% if me.telegram_chat_id %}
-  <p><span class="status inline on"><span class="dot"></span>conectado: seus avisos chegam pelo bot</span></p>
-  <form method="post" action="/conta/telegram/desconectar" onsubmit="return confirm('Parar de receber os avisos no Telegram?')">
-    <button class="btn ghost small">Desconectar</button>
+<section class="card" id="notificacoes">
+  <h2>Onde receber os avisos</h2>
+  <form method="post" action="/conta/notificacoes" class="channel-pick">
+    {% for value, label in [('app', 'App'), ('telegram', 'Telegram'), ('both', 'Ambos')] %}
+    <label class="pill-check"><input type="radio" name="channel" value="{{ value }}" onchange="this.form.submit()"
+           {{ 'checked' if me.notify_channel == value }}><span>{{ label }}</span></label>
+    {% endfor %}
   </form>
-  {% elif bot_link %}
-  <p class="hint">Toque no botão, depois em <b>Iniciar</b> no Telegram. Pronto: os avisos dos seus produtos e
-    das promoções passam a chegar lá.</p>
-  <a href="{{ bot_link }}" class="btn primary block" onclick="try{localStorage.setItem('tg-pending', Date.now())}catch(e){}">Conectar Telegram</a>
-  {% else %}
-  <p class="hint">O bot ainda não está configurado no servidor.</p>
+
+  {% if me.notify_channel in ('app', 'both') %}
+  <div class="channel-box">
+    <p><b>Notificações do app</b> ·
+      {% if devices %}<span class="status inline on"><span class="dot"></span>{{ devices }} aparelho{{ 's' if devices != 1 }}</span>
+      {% else %}<span class="status inline off"><span class="dot"></span>nenhum aparelho ativado</span>{% endif %}</p>
+    {% if push_ok %}
+    <p class="hint" id="push-hint">Ative em cada celular onde quiser receber. Funciona melhor com o app instalado.</p>
+    <div class="row-actions">
+      <button type="button" class="btn primary" id="push-on" onclick="pushOn(this)">Ativar neste celular</button>
+      <button type="button" class="btn ghost" id="push-off" onclick="pushOff(this)" hidden>Desativar neste celular</button>
+    </div>
+    {% else %}
+    <p class="hint">As notificações do app ainda não estão disponíveis no servidor.</p>
+    {% endif %}
+  </div>
   {% endif %}
+
+  {% if me.notify_channel in ('telegram', 'both') %}
+  <div class="channel-box">
+    <p><b>Telegram</b> ·
+      {% if me.telegram_chat_id %}<span class="status inline on"><span class="dot"></span>conectado</span>
+      {% else %}<span class="status inline off"><span class="dot"></span>não conectado</span>{% endif %}</p>
+    {% if me.telegram_chat_id %}
+    <form method="post" action="/conta/telegram/desconectar" onsubmit="return confirm('Parar de receber os avisos no Telegram?')">
+      <button class="btn ghost small">Desconectar</button>
+    </form>
+    {% elif bot_link %}
+    <p class="hint">Toque no botão e depois em <b>Iniciar</b> no Telegram.</p>
+    <a href="{{ bot_link }}" class="btn primary block" onclick="try{localStorage.setItem('tg-pending', Date.now())}catch(e){}">Conectar Telegram</a>
+    {% else %}
+    <p class="hint">O bot ainda não está configurado no servidor.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+  <form method="post" action="/alerts/test" class="actions"><button class="btn soft small">Enviar aviso de teste</button></form>
 </section>
 
 {% if me.is_admin %}
@@ -151,6 +181,53 @@
   <button class="btn soft">{{ icon('logout', 18) }} Sair</button>
 </form>
 <script>
+  // Notificações do app: pede permissão, registra o aparelho no servidor
+  function keyBytes(b64) {
+    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  }
+  function pushHint(msg) { const h = document.getElementById("push-hint"); if (h) h.textContent = msg; }
+  async function pushReady() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      pushHint("Este navegador não suporta notificações. No Android, use o Chrome com o app instalado.");
+      return null;
+    }
+    return navigator.serviceWorker.ready;
+  }
+  async function pushOn(btn) {
+    const reg = await pushReady(); if (!reg) return;
+    btn.disabled = true;
+    try {
+      if (await Notification.requestPermission() !== "granted") {
+        pushHint("Permissão negada. Libere as notificações do MeuPrecinho nas configurações do celular.");
+        return;
+      }
+      const { key } = await (await fetch("/push/key")).json();
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
+      const r = await fetch("/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                 body: JSON.stringify(sub) });
+      if (r.ok) location.reload(); else pushHint("Não consegui ativar. Tente de novo.");
+    } catch (e) { pushHint("Não consegui ativar (" + e.name + ")."); }
+    finally { btn.disabled = false; }
+  }
+  async function pushOff(btn) {
+    const reg = await pushReady(); if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await fetch("/push/unsubscribe", { method: "POST", headers: { "Content-Type": "application/json" },
+                                         body: JSON.stringify({ endpoint: sub.endpoint }) });
+      await sub.unsubscribe();
+    }
+    location.reload();
+  }
+  (async () => {  // mostra "Desativar" se este aparelho já está ativado
+    const on = document.getElementById("push-on"), off = document.getElementById("push-off");
+    if (!on || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+    if (sub) { on.hidden = true; off.hidden = false; pushHint("Este celular já recebe as notificações."); }
+  })();
+
   // Conectar Telegram / Mercado Livre abre fora do app; ao voltar, recarrega a tela
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;

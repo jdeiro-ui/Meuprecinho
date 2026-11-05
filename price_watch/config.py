@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     # App criado em developers.mercadolivre.com.br (API oficial de itens/preços)
     ML_CLIENT_ID: str = ""
     ML_CLIENT_SECRET: str = ""
+    # Contato exigido pelo Web Push (notificações do app), ex.: mailto:voce@exemplo.com
+    VAPID_SUBJECT: str = ""
     # Códigos de afiliado do app (links de compra)
     AMAZON_TAG: str = ""      # ex.: meuprecinho-20
     ML_MATT_WORD: str = ""    # ex.: jldeiro
