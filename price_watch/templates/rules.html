@@ -9,6 +9,13 @@
     <p class="hint">Maiúsculas e acentos não importam. Termine com * para prefixo (<code>notebook*</code>); use " + " para exigir várias palavras em qualquer ordem (<code>galaxy + a27 + 256gb</code>).</p>
     <label>Exclusões <input name="exclusions" value="{{ edit.exclusions if edit }}" placeholder="usado, defeito"></label>
     <p class="hint">Separadas por vírgula. Se aparecerem na mensagem, não avisa.</p>
+    {% if not edit or not edit.item_id %}
+    <label>Avisar só até R$ (opcional)
+      <input name="max_price" inputmode="decimal" value="{{ (edit.max_price_cents|brl) if edit and edit.max_price_cents else '' }}" placeholder="R$ 300,00"></label>
+    <p class="hint">Promoção acima desse preço não avisa. Sem preço na mensagem, avisa marcando "preço não informado".</p>
+    {% else %}
+    <p class="hint">Regra de produto: avisa até o <b>preço-alvo do produto</b> (mude na tela do produto).</p>
+    {% endif %}
     <fieldset>
       <legend>Grupos <small>(nenhum = todos os monitorados)</small></legend>
       {% set sel = edit.groups|map(attribute='id')|list if edit else [] %}

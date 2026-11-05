@@ -4,6 +4,7 @@ import asyncio
 import html
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -21,7 +22,7 @@ from telethon.errors import (
 from . import notifier
 from .config import get_settings
 from .db import SessionLocal
-from .models import Alert, Item, Rule, SeenMessage, TgGroup, User
+from .models import Alert, Item, Rule, SeenMessage, TgGroup, User, utcnow
 from .item_rules import accessory_conflict, variant_conflict, variant_signature
 from .pricing import format_brl, pack_qty, price_in_text
 from .rules import RuleSpec, match_message, message_link, snippet, split_terms
@@ -207,6 +208,7 @@ class TelegramManager:
                     units=r.item.units if r.item else 1,
                     user_id=r.user_id,
                     variant=variant_signature(r.item.name, r.item.brand) if r.item else None,
+                    max_price=r.max_price_cents or (r.item.target_cents if r.item else None),
                     item_name=r.item.name if r.item else None,
                     item_brand=r.item.brand if r.item else None,
                 )
@@ -225,23 +227,61 @@ class TelegramManager:
             hits = [h for h in hits if not h.item_id
                     or (h.units == qty and not variant_conflict(h.variant, text)      # Switch 2 ≠ Switch
                         and not accessory_conflict(h.item_name, h.item_brand, text))]  # jogo PARA o console
+        msg_price = price_in_text(text)
+        # Teto: promoção acima do alvo/teto não avisa (sem preço na mensagem: avisa, marcando)
+        hits = [h for h in hits if not (h.max_price and msg_price and msg_price > h.max_price)]
         if not hits:
             return
         if not await asyncio.to_thread(_mark_seen, chat_id, event.id):
             return  # já avisado (ex.: reentrega após reconexão)
         link = message_link(chat_id, event.id, group.username)
-        msg_price = price_in_text(text)
         by_user: dict[int | None, list] = {}
         for h in hits:  # um aviso por usuário, com todas as regras dele que bateram
             by_user.setdefault(h.user_id, []).append(h)
         for user_id, user_hits in by_user.items():
+            key = f"item:{user_hits[0].item_id}" if user_hits[0].item_id else f"rule:{user_hits[0].id}"
+            previous = await asyncio.to_thread(repeated_promo, user_id, key, msg_price, group.title)
+            if previous is False:
+                continue  # mesma promoção já avisada (outro grupo, últimas 24 h)
             keywords = [h.keyword for h in user_hits]
             trecho = snippet(text, user_hits[0].keyword)
             item_ids = [h.item_id for h in user_hits if h.item_id]
-            extra = await asyncio.to_thread(item_lines, item_ids, msg_price) if item_ids else None
+            extra = await asyncio.to_thread(item_lines, item_ids, msg_price) if item_ids else []
+            if msg_price is None and any(h.max_price for h in user_hits):
+                extra.append("💬 Preço não informado na mensagem")
+            if isinstance(previous, int):
+                extra.append(f"📉 Baixou de novo: antes {format_brl(previous)}")
             chat = getattr(self, "user_chats", {}).get(user_id)
-            ok = await notifier.send(notifier.format_alert(group.title, keywords, trecho, link, extra), chat_id=chat)
-            await asyncio.to_thread(_save_alert, group.title, keywords, trecho, link, ok, user_id)
+            ok = await notifier.send(notifier.format_alert(group.title, keywords, trecho, link, extra or None),
+                                     chat_id=chat)
+            await asyncio.to_thread(_save_alert, group.title, keywords, trecho, link, ok, user_id, key, msg_price)
+
+
+DEDUP_WINDOW = timedelta(hours=24)
+
+
+def repeated_promo(user_id: int | None, key: str, price: int | None, group_title: str):
+    """Mesma promoção (mesmo produto/regra) já avisada a este usuário nas últimas 24 h?
+
+    Devolve None (nada parecido: avisa), o menor preço já avisado (int: avisa porque
+    baixou ≥ 1%) ou False (repetida: não avisa; anota o grupo no aviso anterior)."""
+    since = utcnow() - DEDUP_WINDOW
+    with SessionLocal() as db:
+        recent = db.scalars(select(Alert).where(Alert.user_id == user_id, Alert.dedup_key == key,
+                                                Alert.created_at >= since)
+                            .order_by(Alert.created_at.desc())).all()
+        if not recent:
+            return None
+        prices = [a.price_cents for a in recent if a.price_cents]
+        lowest = min(prices) if prices else None
+        if price and (lowest is None or price <= lowest * 0.99):
+            return lowest or None
+        last = recent[0]
+        groups = [g for g in (last.also_in or "").split(", ") if g]
+        if group_title != last.group_title and group_title not in groups:
+            last.also_in = ", ".join(groups + [group_title])[:2000]
+            db.commit()
+        return False
 
 
 def item_lines(item_ids: list[int], msg_price: int | None) -> list[str]:
@@ -281,10 +321,10 @@ def _mark_seen(chat_id: int, message_id: int) -> bool:
 
 
 def _save_alert(title: str, keywords: list[str], trecho: str, link: str | None, ok: bool,
-                user_id: int | None = None) -> None:
+                user_id: int | None = None, key: str | None = None, price: int | None = None) -> None:
     with SessionLocal() as db:
         db.add(Alert(user_id=user_id, group_title=title, keywords=", ".join(keywords), snippet=trecho,
-                     link=link, delivered=ok))
+                     link=link, delivered=ok, dedup_key=key, price_cents=price))
         db.commit()
 
 

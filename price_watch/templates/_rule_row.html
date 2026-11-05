@@ -6,6 +6,8 @@
       {% if r.item %}<span class="chip hot">produto: {{ (r.item.name or 'acompanhado')|truncate(28) }}</span>{% endif %}
       {% if r.groups %}{% for g in r.groups %}<span class="chip">{{ g.title }}</span>{% endfor %}
       {% else %}<span class="chip">todos os grupos</span>{% endif %}
+      {% set teto = r.max_price_cents or (r.item.target_cents if r.item else none) %}
+      {% if teto %}<span class="chip ok">até {{ teto|brl }}</span>{% endif %}
       {% for e in r.exclusions.split(', ') if e %}<span class="chip neg">sem {{ e }}</span>{% endfor %}
     </div>
   </a>

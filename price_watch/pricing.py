@@ -286,13 +286,29 @@ def pack_qty(text: str | None) -> int:
 # ---------- utilidades ----------
 
 _MSG_PRICE = re.compile(r"R\$\s*(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:,\d{1,2})?)", re.I)
+# Valores que não são o preço do produto: parcela, cupom, desconto, cashback, frete
+_NOT_PRICE_BEFORE = re.compile(
+    r"(?:\d+\s*x\s*(?:de\s*)?|parcelas?\s*(?:de\s*)?|cupom\s*(?:de\s*)?|desconto\s*(?:de\s*)?|"
+    r"economi[sz]e\s*|economia\s*(?:de\s*)?|cashback\s*(?:de\s*)?|frete\s*(?:de\s*)?|"
+    r"off\s*(?:de\s*)?|ganhe\s*|volta\s*)$", re.I)
+_NOT_PRICE_AFTER = re.compile(r"^\s*(?:off\b|de\s+desconto|de\s+cashback|de\s+volta|em\s+cupom|"
+                              r"de\s+frete|na\s+primeira\s+compra)", re.I)
 
 
 def price_in_text(text: str) -> int | None:
-    """Menor preço "R$ ..." citado numa mensagem (promoções costumam trazer "de R$ X
-    por R$ Y"; o menor é o preço da oferta)."""
-    prices = [p for p in (parse_brl(m.group(1)) for m in _MSG_PRICE.finditer(text or "")) if p]
+    """Preço da oferta numa mensagem: o menor "R$ ..." (promoções trazem "de R$ X por
+    R$ Y"), ignorando parcelas ("10x de R$ 199"), cupons ("cupom de R$ 50", "R$ 50 OFF"),
+    descontos, cashback e frete."""
+    text = text or ""
+    prices = []
+    for m in _MSG_PRICE.finditer(text):
+        before = text[max(0, m.start() - 25):m.start()].strip()
+        if _NOT_PRICE_BEFORE.search(before) or _NOT_PRICE_AFTER.match(text[m.end():m.end() + 25]):
+            continue
+        if p := parse_brl(m.group(1)):
+            prices.append(p)
     return min(prices) if prices else None
+
 
 _URL = re.compile(r"https?://[^\s<>\"']+")
 

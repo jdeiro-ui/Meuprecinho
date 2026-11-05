@@ -204,6 +204,8 @@ class Rule(Base):
     # Regra criada a partir de um produto (busca do produto nos grupos do Telegram)
     item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), index=True)
     auto: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # palavra-chave gerada pelo app
+    # Teto: só avisa promoção até este preço (regra de produto usa o preço-alvo do produto)
+    max_price_cents: Mapped[int | None] = mapped_column(Integer)
     item: Mapped[Item | None] = relationship(lazy="joined")
 
 
@@ -219,6 +221,10 @@ class Alert(Base):
     snippet: Mapped[str] = mapped_column(Text)
     link: Mapped[str | None] = mapped_column(String(500))
     delivered: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Promoção repetida em outros grupos: chave (item:<id> / rule:<id>), preço e onde mais apareceu
+    dedup_key: Mapped[str | None] = mapped_column(String(40), index=True)
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    also_in: Mapped[str | None] = mapped_column(Text)
 
 
 class SeenMessage(Base):

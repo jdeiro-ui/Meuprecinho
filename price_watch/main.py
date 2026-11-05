@@ -20,6 +20,7 @@ from .models import Alert, Invite, Rule, TgGroup, User, utcnow
 from .routes_collector import collector_token
 from .routes_collector import router as collector_router
 from .routes_prices import router as prices_router
+from .pricing import parse_brl
 from .security import hash_password, verify_password
 from .telegram import PairingError, manager
 from .web import DB, AdminOnly, AdminRequired, Auth, LoginRequired, Me, back, flash, render
@@ -248,7 +249,7 @@ def rule_edit(request: Request, db: DB, me: Me, rule_id: int):
 @app.post("/rules/{rule_id}")
 async def rule_save(request: Request, db: DB, me: Me, keyword: str = Form(), exclusions: str = Form(""),
                     group_ids: list[int] = Form(default=[]), active: bool = Form(False),
-                    rule_id: int | None = None):
+                    max_price: str = Form(""), rule_id: int | None = None):
     keyword = " ".join(keyword.split())
     if not keyword.rstrip("*"):
         flash(request, "Informe a palavra-chave", "err")
@@ -261,6 +262,7 @@ async def rule_save(request: Request, db: DB, me: Me, keyword: str = Form(), exc
     rule.keyword = keyword
     rule.exclusions = ", ".join(t.strip() for t in exclusions.split(",") if t.strip())
     rule.active = active
+    rule.max_price_cents = parse_brl(max_price)  # vazio = qualquer preço
     rule.groups = list(db.scalars(select(TgGroup).where(TgGroup.id.in_(group_ids)))) if group_ids else []
     db.add(rule)
     db.commit()

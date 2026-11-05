@@ -17,6 +17,7 @@ class RuleSpec:
     units: int = 1              # unidades por embalagem do produto (caixa com 12 = 12)
     user_id: int | None = None  # dono da regra (quem recebe o aviso)
     variant: tuple | None = None  # (linha, número, modificadores) do produto: Switch ≠ Switch 2
+    max_price: int | None = None  # teto: promoção acima disso não avisa
     item_name: str | None = None  # para recusar jogo/acessório PARA o produto
     item_brand: str | None = None
 

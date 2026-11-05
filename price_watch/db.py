@@ -57,6 +57,10 @@ _NEW_COLUMNS = [
     ("items", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE", None),
     ("rules", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE", None),
     ("alerts", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE", None),
+    ("rules", "max_price_cents", "INTEGER", None),
+    ("alerts", "dedup_key", "VARCHAR(40)", None),
+    ("alerts", "price_cents", "INTEGER", None),
+    ("alerts", "also_in", "TEXT", None),
 ]
 
 

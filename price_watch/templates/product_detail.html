@@ -94,7 +94,8 @@
   <h2>Nos grupos do Telegram</h2>
   {% if rule %}
   <p class="hint">Procurando promoções com <code>{{ rule.keyword }}</code> nos grupos monitorados{% if not rule.active %} (pausado){% endif %}.
-    O aviso compara o preço da mensagem com o seu alvo e com as lojas.</p>
+    {% if item.target_cents %}Avisa promoções <b>até {{ item.target_cents|brl }}</b> (seu alvo){% else %}Avisa a <b>qualquer preço</b>; defina um alvo para filtrar{% endif %}.
+    A mesma promoção repetida em outros grupos avisa uma vez só (de novo apenas se o preço cair).</p>
   <a href="/rules/{{ rule.id }}" class="btn soft small">{{ icon('edit', 16) }} Ajustar palavras</a>
   {% elif item.watch_telegram %}
   <p class="hint">A busca nos grupos começa assim que o app souber o nome do produto.</p>
