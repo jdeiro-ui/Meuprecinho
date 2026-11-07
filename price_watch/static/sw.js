@@ -1,6 +1,6 @@
 // Service worker mínimo: cacheia só arquivos estáticos; páginas vêm sempre da rede
 // (dados pessoais não ficam em cache).
-const CACHE = "pw-static-v6";
+const CACHE = "pw-static-v7";
 const ASSETS = ["/static/style.css", "/static/htmx.min.js", "/static/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

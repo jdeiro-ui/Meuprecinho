@@ -52,7 +52,7 @@
 }
 
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; touch-action: pan-x pan-y; overflow-x: clip; max-width: 100%; }
 body {
   margin: 0;
   background: var(--bg);
@@ -186,8 +186,8 @@ legend { font-size: .85rem; font-weight: 600; color: var(--muted); padding: 0; m
 label.check { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 1rem; font-weight: 500; }
 label.check input { width: 22px; height: 22px; margin: 0; accent-color: var(--brand); appearance: auto; }
 .pick { display: flex; flex-wrap: wrap; gap: 8px; }
-.pill-check { margin: 0; }
-.pill-check input { position: absolute; opacity: 0; pointer-events: none; }
+.pill-check { margin: 0; position: relative; }
+.pill-check input { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
 .pill-check span {
   display: inline-block; padding: 8px 14px; border-radius: 99px; border: 1.5px solid var(--line);
   color: var(--text); font-weight: 500; font-size: .9rem; cursor: pointer; transition: all .15s;
