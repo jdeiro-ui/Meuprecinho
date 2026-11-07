@@ -65,6 +65,12 @@ trecho e link (grupos básicos, que não são supergrupos, não têm link de men
 - **Sem repetidas**: a mesma promoção (mesmo produto/regra) em outros grupos nas últimas 24 h não
   avisa de novo, salvo se o preço cair 1% ou mais; a tela Avisos mostra "também em: …".
 
+- **Atualização pelo app** (*Conta → Atualização do app*, só administrador, `updater.py`): mostra a
+  versão e as novidades do repositório; *Atualizar agora* faz `git pull`, instala dependências se
+  mudaram, confere que o código carrega (senão volta à versão anterior) e encerra o processo para o
+  systemd religar. Requer `Restart=always` (ou `on-failure`) no serviço; a tela mostra o comando de
+  uma vez só se faltar.
+
 ## Preços (fase 3)
 
 - **Produtos**: cole o link do produto ou, com o app instalado, use *Compartilhar → MeuPrecinho*

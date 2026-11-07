@@ -142,6 +142,11 @@
   {% endif %}
 </section>
 
+<section class="card" id="atualizacao">
+  <h2>Atualização do app</h2>
+  <div id="update-box" hx-get="/atualizacao" hx-trigger="load" hx-swap="innerHTML"><p class="hint">Verificando…</p></div>
+</section>
+
 <section class="card" id="coletor">
   <h2>Coletor de casa</h2>
   <p class="hint">Lojas como Amazon e Casas Bahia bloqueiam o servidor. O coletor roda no Termux de um

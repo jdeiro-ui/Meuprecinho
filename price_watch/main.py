@@ -13,7 +13,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import bot, item_rules, mercadolivre, monitor, notifier, push, scheduler
+from . import bot, item_rules, mercadolivre, monitor, notifier, push, scheduler, updater
 from .config import get_settings
 from .db import init_db
 from .models import Alert, Invite, PushSubscription, Rule, TgGroup, User, utcnow
@@ -496,6 +496,16 @@ def collector_new_token(request: Request):
     collector_token(regenerate=True)
     flash(request, "Token novo gerado. Rode o comando de instalação de novo no celular.")
     return back("/telegram")
+
+
+@app.get("/atualizacao", dependencies=[AdminOnly])
+async def update_status(request: Request):
+    return render(request, "_update.html", u=await updater.check())
+
+
+@app.post("/atualizacao/aplicar", dependencies=[AdminOnly])
+async def update_apply(request: Request):
+    return render(request, "_update.html", r=await updater.apply())
 
 
 async def _pairing_step(request: Request, coro) -> RedirectResponse:

@@ -353,3 +353,4 @@ form.actions .btn + .btn { margin-left: 6px; }
 .channel-box p { margin: 0 0 6px; }
 
 [hidden] { display: none !important; }  /* botões com display próprio também somem */
+#update-box.htmx-request { opacity: .6; }

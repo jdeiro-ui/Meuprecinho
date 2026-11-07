@@ -1,0 +1,41 @@
+{% if r is defined and r %}
+  {% if r.ok and r.changed and r.restarting %}
+    <p><span class="status inline on"><span class="dot"></span>atualizado, reiniciando…</span></p>
+    <p class="hint">A página recarrega sozinha em alguns segundos.</p>
+    <script>
+      (function wait(n){ setTimeout(function(){
+        fetch('/login',{cache:'no-store'}).then(function(x){ if(x.ok){ location.href='/telegram'; } else { wait(n+1); } })
+          .catch(function(){ if(n<40){ wait(n+1); } });
+      }, 2500); })(0);
+    </script>
+  {% elif r.ok and r.changed %}
+    <p><span class="status inline on"><span class="dot"></span>código atualizado</span></p>
+    <p class="hint">Falta reiniciar: o serviço não religa sozinho. Rode <b>uma vez</b> no SSH o comando abaixo
+      (depois disso, atualizar fica só pelo botão):</p>
+    <div class="cmd"><code>{{ r.enable_cmd or 'sudo systemctl restart price-watch' }}</code></div>
+  {% elif r.ok %}
+    <p><span class="status inline on"><span class="dot"></span>já estava na versão mais recente</span></p>
+  {% else %}
+    <p><span class="status inline off"><span class="dot"></span>não atualizou</span></p>
+    <p class="hint">{{ r.error }}</p>
+  {% endif %}
+{% elif u.error is defined and not u.current %}
+  <p class="hint">{{ u.error }}</p>
+{% else %}
+  <p class="hint">Versão <b>{{ u.current.sha }}</b> · {{ u.current.date }} · {{ u.current.subject }}</p>
+  {% if u.error %}<p class="hint">{{ u.error }}</p>{% endif %}
+  {% if u.behind %}
+    <p><span class="status inline off"><span class="dot"></span>{{ u.behind }} novidade{{ 's' if u.behind > 1 }}</span></p>
+    <ul class="steps">{% for s in u.incoming %}<li>{{ s }}</li>{% endfor %}</ul>
+    <form hx-post="/atualizacao/aplicar" hx-target="#update-box" hx-swap="innerHTML"
+          hx-disabled-elt="find button" hx-indicator="#update-box">
+      <button class="btn primary block">Atualizar agora</button>
+    </form>
+    {% if u.unit and not u.auto_restart %}
+    <p class="hint">Antes, rode <b>uma vez</b> no SSH, para o app reiniciar sozinho:</p>
+    <div class="cmd"><code>{{ u.enable_cmd }}</code></div>
+    {% endif %}
+  {% elif not u.error %}
+    <p><span class="status inline on"><span class="dot"></span>no dia</span></p>
+  {% endif %}
+{% endif %}
