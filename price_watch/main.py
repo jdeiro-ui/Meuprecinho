@@ -13,7 +13,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import bot, item_rules, mercadolivre, monitor, notifier, push, scheduler, updater
+from . import bot, item_rules, mercadolivre, monitor, notifier, offers, push, scheduler, updater
 from .config import get_settings
 from .db import init_db
 from .models import Alert, Invite, PushSubscription, Rule, TgGroup, User, utcnow
@@ -52,6 +52,7 @@ def _admin_chat_from_env() -> None:
 async def lifespan(_: FastAPI):
     init_db()
     _admin_chat_from_env()
+    offers.merge_duplicates()  # limpa repetidas gravadas por versões anteriores
     item_rules.resync_all()  # regras automáticas dos produtos sempre com o gerador atual
     await manager.start()
     bot_task = asyncio.create_task(bot.run()) if settings.BOT_TOKEN else None

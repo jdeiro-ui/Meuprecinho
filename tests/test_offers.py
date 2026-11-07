@@ -233,3 +233,34 @@ def test_detalhes_aparecem_no_cartao(clean):
     offers.remember("G", TENIS)
     with SessionLocal() as db:
         assert "Tamanhos 38 ao 44" in db.query(Offer).one().details
+
+
+def test_postagem_e_edicao_simultaneas_geram_um_cartao(clean):
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(6) as ex:
+        list(ex.map(lambda _: offers.remember("G", MSG), range(6)))
+    with SessionLocal() as db:
+        (o,) = db.query(Offer).all()
+        assert o.seen_count == 6
+
+
+def test_titulos_quase_iguais_na_mesma_loja_viram_um_cartao(clean):
+    offers.remember("A", "Tênis Adidas Superstar Branco por R$ 199 https://amzn.to/aaa")
+    offers.remember("B", "Adidas Superstar tênis branco R$ 189 https://amzn.to/bbb")   # outro link e outra ordem
+    offers.remember("C", "Tênis Nike Air Max 90 por R$ 499 https://amzn.to/ccc")        # outro produto
+    with SessionLocal() as db:
+        rows = db.query(Offer).order_by(Offer.id).all()
+        assert [r.price_cents for r in rows] == [18900, 49900] and rows[0].old_price_cents == 19900
+
+
+def test_merge_junta_repetidas_ja_gravadas_e_soma_cliques(clean):
+    with SessionLocal() as db:
+        for i, price in enumerate((20000, 18000)):
+            db.add(Offer(key=f"u:x{i}", title="Cadeira Gamer Pichau Preta", search="cadeira gamer pichau preta",
+                         price_cents=price, store="Pichau", url=f"https://pichau.com.br/{i}", clicks=i + 1))
+        db.commit()
+    assert offers.merge_duplicates() == 1
+    with SessionLocal() as db:
+        (o,) = db.query(Offer).all()
+        assert (o.price_cents, o.old_price_cents, o.clicks) == (18000, 20000, 3)

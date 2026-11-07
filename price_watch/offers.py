@@ -6,13 +6,14 @@ para o administrador."""
 
 import logging
 import re
+import threading
 from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import timedelta
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, select
 
 from . import affiliate, mercadolivre
 from .config import get_settings
@@ -244,20 +245,33 @@ class Result:
     needs_image: bool
 
 
+_lock = threading.Lock()  # a postagem e a edição da mesma mensagem chegam quase juntas
+SIMILAR = 0.75
+
+
+def _same_product(a_key: str, a_store: str, a_search: str, b_key: str, b_store: str, b_search: str) -> bool:
+    """Mesma oferta: mesmo produto/link, ou mesma loja com título quase igual (palavras em comum)."""
+    if a_key == b_key:
+        return True
+    if a_store != b_store:
+        return False
+    x, y = set(a_search.split()), set(b_search.split())
+    return len(x) >= 3 and len(y) >= 3 and len(x & y) / len(x | y) >= SIMILAR
+
+
 def remember(source_title: str, text: str) -> Result | None:
     p, reason, unknown = _parse(text)
     _seen.append((utcnow(), reason, unknown))
     if p is None:
         return None
-    tkey, now = _title_key(p.title), utcnow()
-    with SessionLocal() as db:
-        match = or_(Offer.key == p.key, (Offer.title_key == tkey) & (Offer.price_cents == p.price)) if tkey \
-            else Offer.key == p.key
-        o = db.scalar(select(Offer).where(match, Offer.updated_at >= now - MERGE_WINDOW)
-                      .order_by(Offer.updated_at.desc()))
+    search, now = normalize(p.title)[:200], utcnow()
+    with _lock, SessionLocal() as db:
+        recent = db.scalars(select(Offer).where(Offer.updated_at >= now - MERGE_WINDOW)
+                            .order_by(Offer.updated_at.desc())).all()
+        o = next((r for r in recent if _same_product(r.key, r.store, r.search, p.key, p.store, search)), None)
         if o is None:
-            o = Offer(key=p.key, title_key=tkey, title=p.title, search=normalize(p.title)[:200], price_cents=p.price, coupon=p.coupon,
-                      store=p.store, url=p.url, details=p.details, source_title=source_title[:255])
+            o = Offer(key=p.key, title_key=_title_key(p.title), title=p.title, search=search, price_cents=p.price,
+                      coupon=p.coupon, store=p.store, url=p.url, details=p.details, source_title=source_title[:255])
             db.add(o)
         else:
             if p.price and (o.price_cents is None or p.price < o.price_cents):
@@ -268,6 +282,36 @@ def remember(source_title: str, text: str) -> Result | None:
             o.updated_at = now
         db.commit()
         return Result(o.id, not o.image)
+
+
+def merge_duplicates() -> int:
+    """Junta ofertas repetidas que já estavam gravadas (mantém a mais antiga; soma cliques)."""
+    removed = 0
+    with _lock, SessionLocal() as db:
+        rows = db.scalars(select(Offer).where(Offer.updated_at >= utcnow() - RETENTION)
+                          .order_by(Offer.created_at)).all()
+        kept: list[Offer] = []
+        for o in rows:
+            twin = next((k for k in kept if abs((k.updated_at - o.updated_at).total_seconds()) <= MERGE_WINDOW.total_seconds()
+                         and _same_product(k.key, k.store, k.search, o.key, o.store, o.search)), None)
+            if twin is None:
+                kept.append(o)
+                continue
+            if o.price_cents and (twin.price_cents is None or o.price_cents < twin.price_cents):
+                twin.old_price_cents, twin.price_cents = twin.price_cents, o.price_cents
+            twin.coupon, twin.details = twin.coupon or o.coupon, twin.details or o.details
+            twin.clicks += o.clicks
+            twin.seen_count += o.seen_count
+            twin.updated_at = max(twin.updated_at, o.updated_at)
+            if o.image and not twin.image:
+                image_path(o.id).replace(image_path(twin.id))
+                twin.image = True
+            else:
+                image_path(o.id).unlink(missing_ok=True)
+            db.delete(o)
+            removed += 1
+        db.commit()
+    return removed
 
 
 # ---------- imagem ----------
@@ -314,6 +358,7 @@ def feed(db, q: str = "", store: str = "", limit: int = 60, offset: int = 0) -> 
 
 
 def cleanup() -> None:
+    merge_duplicates()
     with SessionLocal() as db:
         old = db.scalars(select(Offer).where(Offer.updated_at < utcnow() - RETENTION)).all()
         for o in old:
