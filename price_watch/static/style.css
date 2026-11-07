@@ -355,3 +355,21 @@ form.actions .btn + .btn { margin-left: 6px; }
 
 [hidden] { display: none !important; }  /* botões com display próprio também somem */
 #update-box.htmx-request { opacity: .6; }
+
+/* aba Ofertas */
+.search-row { display: flex; gap: 8px; margin: 0 0 10px; }
+.search-row input { flex: 1; min-width: 0; }
+.store-filter { margin: 0 0 12px; flex-wrap: wrap; }
+.store-filter .chip { text-decoration: none; }
+.offer { display: flex; gap: 12px; align-items: flex-start; }
+.offer-img { width: 84px; height: 84px; object-fit: cover; border-radius: 14px; flex: none; background: var(--brand-soft); }
+.offer-body { min-width: 0; flex: 1; }
+.offer-title { display: block; overflow-wrap: anywhere; }
+.coupon {
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding: 8px 12px;
+  border: 2px dashed var(--hot-ink); border-radius: 12px; background: var(--hot-soft); color: var(--hot-ink);
+  font: inherit; cursor: pointer; text-align: left;
+}
+.coupon b { letter-spacing: .04em; }
+.coupon small { opacity: .75; }
+.offer .row-actions { flex-wrap: wrap; margin-top: 12px; }

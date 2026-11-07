@@ -50,6 +50,7 @@ def _local(dt: datetime | None, fmt: str = "%d/%m %H:%M") -> str:
 
 
 templates.env.globals["asset_v"] = int((BASE / "static/style.css").stat().st_mtime)
+templates.env.globals["products_open"] = lambda me: bool(me and (me.is_admin or get_settings().PRODUCTS_FOR_USERS))
 templates.env.filters["local"] = _local
 templates.env.globals["buy_link"] = lambda p: f"/r/{p.id}?s={click_sig(p.id)}"
 templates.env.filters["brl"] = format_brl
@@ -62,6 +63,15 @@ class LoginRequired(Exception):
 
 class AdminRequired(Exception):
     pass
+
+
+class ProductsClosed(Exception):
+    """Monitor de lojas (Produtos) fechado para convidados no soft launch."""
+
+
+DISCLOSURE = ("O MeuPrecinho é gratuito. Compras feitas pelos links do app podem gerar créditos "
+              "(comissão) para o MeuPrecinho, sem custo extra para você.")
+templates.env.globals["disclosure"] = DISCLOSURE
 
 
 def require_user(request: Request) -> int:
@@ -84,6 +94,11 @@ def require_admin(user: Annotated[User, Depends(current_user)]) -> User:
     if not user.is_admin:
         raise AdminRequired
     return user
+
+
+def products_gate(user: Annotated[User, Depends(current_user)]) -> None:
+    if not (user.is_admin or get_settings().PRODUCTS_FOR_USERS):
+        raise ProductsClosed
 
 
 Auth = Depends(current_user)

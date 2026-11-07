@@ -28,7 +28,7 @@ def _client(name):
     main._fails.clear()
     c = TestClient(main.app)
     r = c.post("/login", data={"username": name, "password": "senha-" + name})
-    assert r.url.path == "/products"
+    assert r.url.path in ("/products", "/ofertas")
     return c
 
 
@@ -44,7 +44,7 @@ def test_convite_cria_conta_uma_vez_e_so_admin_gera():
 
     comum.post("/convites", data={"note": "x"})
     assert "Convites" not in comum.get("/telegram").text           # área de admin escondida
-    assert comum.get("/groups", follow_redirects=False).headers["location"] == "/products"
+    assert comum.get("/groups", follow_redirects=False).headers["location"] == "/"
     assert comum.get("/stores", follow_redirects=False).status_code == 303
 
     admin.post("/convites", data={"note": "Maria"})

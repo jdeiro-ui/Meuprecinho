@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block heading %}Avisos{% endblock %}
-{% block subtitle %}<p class="sub">Promoções do Telegram e quedas de preço</p>{% endblock %}
+{% block subtitle %}<p class="sub">{{ 'Promoções do Telegram e quedas de preço' if me.is_admin else 'Ofertas que combinam com as suas regras' }}</p>{% endblock %}
 {% block content %}
 {% if not bot_ok %}
 <div class="toast err">{{ icon('alert', 20) }}<span>Você ainda não recebe os avisos no celular: eles ficam só aqui. <a href="/telegram#notificacoes">Ativar</a></span></div>
@@ -20,10 +20,10 @@
     {% if not a.delivered %}<span class="chip bad">não entregue</span>{% endif %}
   </div>
   <p class="snippet">{{ a.snippet }}</p>
-  {% if a.also_in %}<p class="hint">Também em: {{ a.also_in }}</p>{% endif %}
-  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener{{ ' sponsored' if a.source == 'price' }}" class="btn soft small">{{ icon('external', 16) }} {{ 'Comprar na loja' if a.source == 'price' else 'Abrir no Telegram' }}</a>{% endif %}
+  {% if a.also_in and me.is_admin %}<p class="hint">Também em: {{ a.also_in }}</p>{% endif %}
+  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener{{ ' sponsored' if a.source == 'price' }}" class="btn soft small">{{ icon('external', 16) }} {{ 'Comprar na loja' if a.source == 'price' else ('Abrir no Telegram' if me.is_admin else 'Ver oferta') }}</a>{% endif %}
 </article>
 {% else %}
-<div class="empty">{{ icon('bell', 40) }}<p>Nenhum aviso ainda.</p><small>Promoções do Telegram e quedas de preço aparecem aqui e no seu bot.</small></div>
+<div class="empty">{{ icon('bell', 40) }}<p>Nenhum aviso ainda.</p><small>Ofertas que combinam com as suas regras aparecem aqui e nas suas notificações.</small></div>
 {% endfor %}
 {% endblock %}

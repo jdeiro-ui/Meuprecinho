@@ -5,7 +5,7 @@ from sqlalchemy import delete
 
 from .db import SessionLocal
 from .models import Alert, PricePoint, SeenMessage, utcnow
-from . import monitor
+from . import monitor, offers
 from .telegram import manager
 
 scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
@@ -17,6 +17,7 @@ def _cleanup() -> None:
         db.execute(delete(Alert).where(Alert.created_at < utcnow() - timedelta(days=90)))
         db.execute(delete(PricePoint).where(PricePoint.checked_at < utcnow() - timedelta(days=365)))
         db.commit()
+    offers.cleanup()
 
 
 def start() -> None:

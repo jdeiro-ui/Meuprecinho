@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block heading %}Ofertas{% endblock %}
+{% block subtitle %}<p class="sub">Promoções encontradas agora</p>{% endblock %}
+{% block content %}
+<form method="get" action="/ofertas" class="search-row">
+  <input name="q" value="{{ q }}" placeholder="Buscar produto" aria-label="Buscar produto" enterkeyhint="search">
+  {% if loja %}<input type="hidden" name="loja" value="{{ loja }}">{% endif %}
+  <button class="btn soft">{{ icon('search', 18) }}</button>
+</form>
+{% if stores %}
+<div class="chips store-filter">
+  <a class="chip {{ 'hot' if not loja }}" href="/ofertas{{ '?q=' ~ (q|urlencode) if q }}">Todas</a>
+  {% for s in stores %}<a class="chip {{ 'hot' if s == loja }}" href="/ofertas?loja={{ s|urlencode }}{{ '&q=' ~ (q|urlencode) if q }}">{{ s }}</a>{% endfor %}
+</div>
+{% endif %}
+{% for o in offers %}
+<article class="card offer">
+  {% if o.image %}<img class="offer-img" src="/ofertas/img/{{ o.id }}" loading="lazy" alt="">{% endif %}
+  <div class="offer-body">
+    <strong class="offer-title">{{ o.title }}</strong>
+    <div class="price-row">
+      {% if o.price_cents %}<span class="price">{{ o.price_cents|brl }}</span>{% endif %}
+      {% if o.old_price_cents %}<s class="muted">{{ o.old_price_cents|brl }}</s>{% endif %}
+    </div>
+    <div class="chips">
+      <span class="chip">{{ o.store }}</span>
+      <span class="chip">{{ o.updated_at|ago }}</span>
+      {% if me.is_admin and o.source_title %}<span class="chip">{{ o.source_title }}</span>{% endif %}
+    </div>
+    {% if o.coupon %}
+    <button type="button" class="coupon" data-code="{{ o.coupon }}"
+            onclick="navigator.clipboard.writeText(this.dataset.code).then(()=>{this.querySelector('small').textContent='copiado!'})">
+      {{ icon('tag', 16) }} Cupom <b>{{ o.coupon }}</b> <small>toque para copiar</small></button>
+    {% endif %}
+    <div class="row-actions">
+      <a class="btn primary small" href="/o/{{ o.id }}" target="_blank" rel="noopener sponsored">{{ icon('external', 16) }} Comprar</a>
+      <form method="post" action="/ofertas/{{ o.id }}/seguir"><button class="btn soft small">{{ icon('bell', 16) }} Avisar quando aparecer</button></form>
+    </div>
+  </div>
+</article>
+{% else %}
+<div class="empty">{{ icon('flame', 40) }}<p>Nenhuma oferta {{ 'encontrada' if q or loja else 'ainda' }}.</p><small>As promoções aparecem aqui assim que forem encontradas.</small></div>
+{% endfor %}
+{% if more %}<a class="btn ghost block" href="/ofertas?p={{ page + 1 }}{{ '&q=' ~ (q|urlencode) if q }}{{ '&loja=' ~ (loja|urlencode) if loja }}">Ver mais</a>{% endif %}
+<p class="disclosure">{{ disclosure }}</p>
+{% endblock %}

@@ -243,6 +243,28 @@ class Alert(Base):
     also_in: Mapped[str | None] = mapped_column(Text)
 
 
+class Offer(Base):
+    """Promoção encontrada nos canais monitorados (aba Ofertas, para todos os usuários)."""
+    __tablename__ = "offers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    key: Mapped[str] = mapped_column(String(160), index=True)  # produto/link normalizado
+    title_key: Mapped[str] = mapped_column(String(100), index=True, default="")
+    title: Mapped[str] = mapped_column(String(120))
+    search: Mapped[str] = mapped_column(String(200), default="")  # título sem acento, para a busca
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    old_price_cents: Mapped[int | None] = mapped_column(Integer)
+    coupon: Mapped[str | None] = mapped_column(String(40))
+    store: Mapped[str] = mapped_column(String(40))
+    url: Mapped[str] = mapped_column(String(700))
+    image: Mapped[bool] = mapped_column(Boolean, default=False)
+    source_title: Mapped[str] = mapped_column(String(255), default="")  # só o administrador vê
+    clicks: Mapped[int] = mapped_column(Integer, default=0)
+    seen_count: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class SeenMessage(Base):
     __tablename__ = "seen_messages"
     __table_args__ = (UniqueConstraint("chat_id", "message_id"),)

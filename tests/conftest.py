@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # Configuração isolada para os testes (não lê o .env real)
 os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789")
+os.environ.setdefault("PRODUCTS_FOR_USERS", "true")  # os testes antigos usam Produtos como convidado
 os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="pw-test-"))
 
 import pytest  # noqa: E402

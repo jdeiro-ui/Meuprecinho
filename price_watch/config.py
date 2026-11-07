@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     ML_CLIENT_SECRET: str = ""
     # Contato exigido pelo Web Push (notificações do app), ex.: mailto:voce@exemplo.com
     VAPID_SUBJECT: str = ""
+    # Soft launch: convidados veem só Ofertas/Regras/Avisos; Produtos e Lojas ficam com o administrador
+    PRODUCTS_FOR_USERS: bool = False
     # Códigos de afiliado do app (links de compra)
     AMAZON_TAG: str = ""      # ex.: meuprecinho-20
     ML_MATT_WORD: str = ""    # ex.: jldeiro

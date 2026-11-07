@@ -19,7 +19,7 @@ from telethon.errors import (
     SessionPasswordNeededError,
 )
 
-from . import notifier
+from . import notifier, offers
 from .config import get_settings
 from .db import SessionLocal
 from .models import Alert, Item, Rule, SeenMessage, TgGroup, User, utcnow
@@ -51,6 +51,7 @@ class TelegramManager:
         self.groups: dict[int, GroupInfo] = {}
         self.rules: list[RuleSpec] = []
         self.user_chats: dict[int, str | None] = {}
+        self.admins: set[int] = set()
         self._lock = asyncio.Lock()
         self._connect_task: asyncio.Task | None = None
 
@@ -197,7 +198,9 @@ class TelegramManager:
             rules = db.scalars(select(Rule).where(Rule.active)).all()
             self.groups = {g.chat_id: GroupInfo(g.title, g.username) for g in groups}
             # Conversa de cada usuário com o bot (para onde vão os avisos)
-            self.user_chats = {u.id: u.telegram_chat_id for u in db.scalars(select(User))}
+            users = db.scalars(select(User)).all()
+            self.user_chats = {u.id: u.telegram_chat_id for u in users}
+            self.admins = {u.id for u in users if u.is_admin}  # só eles veem o nome do canal
             self.rules = [
                 RuleSpec(
                     id=r.id,
@@ -215,12 +218,26 @@ class TelegramManager:
                 for r in rules
             ]
 
+    async def _capture_offer(self, event, group: "GroupInfo", text: str) -> None:
+        """Alimenta a aba Ofertas; uma falha aqui nunca pode atrapalhar os avisos."""
+        try:
+            res = await asyncio.to_thread(offers.remember, group.title, text)
+            msg = getattr(event, "message", event)
+            photo = getattr(msg, "photo", None)
+            if res and res.needs_image and photo is not None:
+                data = await msg.download_media(file=bytes, thumb=offers.pick_size(photo))
+                if data:
+                    await asyncio.to_thread(offers.save_image, res.id, data)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Falha ao registrar oferta (%s)", type(exc).__name__)
+
     async def _on_message(self, event: events.NewMessage.Event) -> None:
         chat_id = event.chat_id
         group = self.groups.get(chat_id)
         if group is None:  # ignora tudo que não foi marcado
             return
         text = event.raw_text or ""
+        await self._capture_offer(event, group, text)
         hits = match_message(text, chat_id, self.rules)
         if any(h.item_id for h in hits):
             qty = pack_qty(text)  # promoção da unidade avulsa não serve para a caixa (e vice-versa)
@@ -238,13 +255,18 @@ class TelegramManager:
         by_user: dict[int | None, list] = {}
         for h in hits:  # um aviso por usuário, com todas as regras dele que bateram
             by_user.setdefault(h.user_id, []).append(h)
+        store_link = offers.first_store_url(text)
         for user_id, user_hits in by_user.items():
+            admin = user_id is None or user_id in self.admins
+            shown = group.title if admin else offers.GENERIC_SOURCE  # convidado não vê de qual canal veio
             key = f"item:{user_hits[0].item_id}" if user_hits[0].item_id else f"rule:{user_hits[0].id}"
-            previous = await asyncio.to_thread(repeated_promo, user_id, key, msg_price, group.title)
+            previous = await asyncio.to_thread(repeated_promo, user_id, key, msg_price, shown)
             if previous is False:
                 continue  # mesma promoção já avisada (outro grupo, últimas 24 h)
             keywords = [h.keyword for h in user_hits]
             trecho = snippet(text, user_hits[0].keyword)
+            if not admin:
+                trecho = offers.scrub(trecho)
             item_ids = [h.item_id for h in user_hits if h.item_id]
             extra = await asyncio.to_thread(item_lines, item_ids, msg_price) if item_ids else []
             if msg_price is None and any(h.max_price for h in user_hits):
@@ -254,10 +276,13 @@ class TelegramManager:
             subject = await asyncio.to_thread(_item_name, item_ids[0]) if item_ids else keywords[0]
             title = f"🔔 {subject}" + (f" · {format_brl(msg_price)}" if msg_price else "")
             # Ao tocar: post do canal (se público, abre para qualquer um) ou a tela Avisos
-            url = link if (link and group.username) else "/alerts"
-            ok = await notifier.deliver(user_id, notifier.format_alert(group.title, keywords, trecho, link, extra or None),
-                                        title=title, body=f"{group.title}: {trecho}", url=url, tag=key)
-            await asyncio.to_thread(_save_alert, group.title, keywords, trecho, link, ok, user_id, key, msg_price)
+            url = link if (admin and link and group.username) else "/alerts"
+            out_link = link if admin else store_link
+            ok = await notifier.deliver(
+                user_id, notifier.format_alert(shown, keywords, trecho, out_link, extra or None,
+                                               "Abrir mensagem" if admin else "Ver oferta"),
+                title=title, body=f"{shown}: {trecho}" if admin else trecho, url=url, tag=key)
+            await asyncio.to_thread(_save_alert, shown, keywords, trecho, out_link, ok, user_id, key, msg_price)
 
 
 DEDUP_WINDOW = timedelta(hours=24)

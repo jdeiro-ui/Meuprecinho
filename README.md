@@ -65,6 +65,15 @@ trecho e link (grupos básicos, que não são supergrupos, não têm link de men
 - **Sem repetidas**: a mesma promoção (mesmo produto/regra) em outros grupos nas últimas 24 h não
   avisa de novo, salvo se o preço cair 1% ou mais; a tela Avisos mostra "também em: …".
 
+- **Aba Ofertas** (`offers.py`, `routes_offers.py`): toda mensagem dos canais monitorados com link de
+  loja e preço (ou cupom) vira um cartão com imagem, nome, preço, **cupom** (toque para copiar) e loja;
+  a mesma promoção em vários canais vira um cartão só (guarda o menor preço); somem após 7 dias. Os
+  botões são *Comprar* (`/o/<id>`, repassa o link da mensagem e conta o clique) e *Avisar quando
+  aparecer* (cria uma regra até o preço da oferta). Há aviso de que compras pelos links podem gerar
+  comissão. **Convidados não veem os canais**: sem a tela Grupos, sem nome do canal em ofertas e avisos
+  (o aviso sai como "Oferta encontrada", sem links/@ de canal) e sem escolher grupos nas regras; só o
+  administrador vê a origem. Produtos/Lojas ficam só com o administrador (`PRODUCTS_FOR_USERS=true`
+  no `.env` reabre para os convidados).
 - **Atualização pelo app** (*Conta → Atualização do app*, só administrador, `updater.py`): mostra a
   versão e as novidades do repositório; *Atualizar agora* faz `git pull`, instala dependências se
   mudaram, confere que o código carrega (senão volta à versão anterior) e encerra o processo para o

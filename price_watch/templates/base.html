@@ -18,7 +18,7 @@
   {% set online = (tg.authorized and tg.connected) if me and me.is_admin else (me and me.telegram_chat_id) %}
   <header class="hero">
     <div class="brand-row">
-      <a href="/products" class="brand"><img src="/static/icons/icon-192.png" alt="" width="34" height="34">MeuPrecinho</a>
+      <a href="/" class="brand"><img src="/static/icons/icon-192.png" alt="" width="34" height="34">MeuPrecinho</a>
       <a class="status {{ 'on' if online else 'off' }}" href="/telegram">
         <span class="dot"></span>{% if me and me.is_admin %}{{ 'Grupos on' if online else 'Grupos off' }}{% else %}{{ 'Avisos on' if online else 'Avisos off' }}{% endif %}</a>
     </div>
@@ -35,7 +35,8 @@
   {% if request.session.get('uid') %}
   {% set p = request.url.path %}
   <nav class="dock">
-    {% set tabs = [('/alerts','bell','Avisos'), ('/products','tag','Produtos'), ('/rules','search','Regras')]
+    {% set tabs = [('/ofertas','flame','Ofertas'), ('/alerts','bell','Avisos')]
+                  + ([('/products','tag','Produtos')] if products_open(me) else []) + [('/rules','search','Regras')]
                   + ([('/groups','users','Grupos')] if me and me.is_admin else []) + [('/telegram','user','Conta')] %}
     {% for href, ico, label in tabs %}
     <a href="{{ href }}" class="{{ 'active' if p.startswith(href) or (href == '/products' and p.startswith('/stores')) }}">{{ icon(ico) }}<span>{{ label }}</span></a>

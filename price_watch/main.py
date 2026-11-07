@@ -19,11 +19,12 @@ from .db import init_db
 from .models import Alert, Invite, PushSubscription, Rule, TgGroup, User, utcnow
 from .routes_collector import collector_token
 from .routes_collector import router as collector_router
+from .routes_offers import router as offers_router
 from .routes_prices import router as prices_router
 from .pricing import parse_brl
 from .security import hash_password, verify_password
 from .telegram import PairingError, manager
-from .web import DB, AdminOnly, AdminRequired, Auth, LoginRequired, Me, back, flash, render
+from .web import DB, AdminOnly, AdminRequired, Auth, LoginRequired, Me, ProductsClosed, back, flash, render
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("telethon").setLevel(logging.WARNING)
@@ -74,6 +75,7 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 app.include_router(prices_router)
+app.include_router(offers_router)
 app.include_router(collector_router)
 
 
@@ -84,7 +86,14 @@ async def _not_admin(request: Request, _: AdminRequired):
     if request.headers.get("HX-Request"):
         return Response(status_code=403)
     flash(request, "Essa área é só do administrador", "err")
-    return RedirectResponse("/products", status_code=303)
+    return RedirectResponse("/", status_code=303)
+
+
+@app.exception_handler(ProductsClosed)
+async def _products_closed(request: Request, _: ProductsClosed):
+    if request.headers.get("HX-Request"):
+        return Response(status_code=403)
+    return RedirectResponse("/ofertas", status_code=303)
 
 
 @app.exception_handler(LoginRequired)
@@ -161,9 +170,9 @@ def healthz():
     return {"ok": True, "telegram": manager.connected}
 
 
-@app.get("/", dependencies=[Auth])
-def home():
-    return back("/products")
+@app.get("/")
+def home(request: Request, me: Me):
+    return back("/products" if me.is_admin or settings.PRODUCTS_FOR_USERS else "/ofertas")
 
 
 # ---------- avisos ----------
@@ -316,7 +325,8 @@ async def rule_save(request: Request, db: DB, me: Me, keyword: str = Form(), exc
     rule.exclusions = ", ".join(t.strip() for t in exclusions.split(",") if t.strip())
     rule.active = active
     rule.max_price_cents = parse_brl(max_price)  # vazio = qualquer preço
-    rule.groups = list(db.scalars(select(TgGroup).where(TgGroup.id.in_(group_ids)))) if group_ids else []
+    if me.is_admin:  # convidados não escolhem (nem veem) os canais
+        rule.groups = list(db.scalars(select(TgGroup).where(TgGroup.id.in_(group_ids)))) if group_ids else []
     db.add(rule)
     db.commit()
     await asyncio.to_thread(manager.reload)

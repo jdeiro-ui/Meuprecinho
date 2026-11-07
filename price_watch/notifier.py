@@ -28,7 +28,7 @@ async def close() -> None:
 
 
 def format_alert(group_title: str, keywords: list[str], text: str, link: str | None,
-                 extra: list[str] | None = None) -> str:
+                 extra: list[str] | None = None, link_label: str = "Abrir mensagem") -> str:
     """extra: linhas já em HTML (ex.: comparação com o produto acompanhado)."""
     e = html.escape
     parts = [
@@ -39,7 +39,7 @@ def format_alert(group_title: str, keywords: list[str], text: str, link: str | N
         e(text),
     ]
     if link:
-        parts += ["", f'<a href="{e(link, quote=True)}">Abrir mensagem</a>']
+        parts += ["", f'<a href="{e(link, quote=True)}">{e(link_label)}</a>']
     return "\n".join(parts)
 
 

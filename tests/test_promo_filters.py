@@ -45,7 +45,8 @@ def env(monkeypatch):
         db.query(Rule).delete()
         u = db.query(User).filter_by(username="teto").first() or \
             User(username="teto", password_hash=hash_password("senha-teto-1"), telegram_chat_id="77",
-                 notify_channel="telegram")
+                 notify_channel="telegram", is_admin=True)  # admin vê o nome do grupo
+        u.is_admin = True
         db.add(u)
         db.flush()
         db.query(Item).filter_by(user_id=u.id).delete()

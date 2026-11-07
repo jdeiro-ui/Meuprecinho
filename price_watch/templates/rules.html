@@ -16,6 +16,7 @@
     {% else %}
     <p class="hint">Regra de produto: avisa até o <b>preço-alvo do produto</b> (mude na tela do produto).</p>
     {% endif %}
+    {% if me.is_admin %}
     <fieldset>
       <legend>Grupos <small>(nenhum = todos os monitorados)</small></legend>
       {% set sel = edit.groups|map(attribute='id')|list if edit else [] %}
@@ -25,6 +26,7 @@
       {% else %}<p class="hint">Nenhum grupo monitorado ainda.</p>{% endfor %}
       </div>
     </fieldset>
+    {% endif %}
     <label class="check"><input type="checkbox" name="active" {{ 'checked' if not edit or edit.active }}> Regra ativa</label>
     <div class="row-actions">
       <button class="btn primary">Salvar</button>

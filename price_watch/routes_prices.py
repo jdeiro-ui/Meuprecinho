@@ -5,7 +5,7 @@ import asyncio
 from datetime import timedelta
 from urllib.parse import quote, urlsplit
 
-from fastapi import APIRouter, BackgroundTasks, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from sqlalchemy import select
 
 from . import affiliate, item_rules, linking, monitor
@@ -13,9 +13,9 @@ from .telegram import manager
 from .models import Item, PricePoint, Product, Rule, Store, Suggestion, User, utcnow
 from .pricing import find_url, host_of, parse_brl
 from .stores_catalog import BY_DOMAIN, CATALOG
-from .web import DB, AdminOnly, Auth, Me, back, flash, render
+from .web import DB, AdminOnly, Auth, Me, back, flash, products_gate, render
 
-router = APIRouter(dependencies=[Auth])
+router = APIRouter(dependencies=[Auth, Depends(products_gate)])
 
 READ_MODES = {"http": "HTTP", "browser": "Navegador"}
 FETCH_VIA = {"vm": "Servidor", "home": "Celular de casa", "api": "API oficial (Mercado Livre)"}
