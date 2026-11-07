@@ -201,3 +201,11 @@ def test_resolve_segue_redirecionamentos_ate_o_destino(monkeypatch):
     offers._resolved.clear()
     assert REAL_RESOLVE("https://tenis.cc/x") == "https://www.nike.com.br/tenis-1"
     assert REAL_RESOLVE("https://tenis.cc/x") == "https://www.nike.com.br/tenis-1"      # segunda vez vem do cache
+
+
+def test_destino_generico_nao_junta_ofertas_diferentes(clean, monkeypatch):
+    monkeypatch.setattr(offers, "resolve", lambda url: "https://teniscerto.com/")
+    offers.remember("A", "Tênis Nike Air Max 90 por R$ 499 https://tenis.cc/aaa")
+    offers.remember("A", "Chinelo Rider Bay por R$ 59 https://tenis.cc/bbb")
+    with SessionLocal() as db:
+        assert db.query(Offer).count() == 2

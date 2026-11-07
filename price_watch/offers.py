@@ -176,7 +176,7 @@ def _parse(text: str) -> tuple[Parsed | None, str, str | None]:
         return None, "sem preço nem cupom", None
     store, target = _store_of(_host(url)) or "Loja", url
     if _is_short(_host(url)) and (final := resolve(url)):
-        target = final
+        target = final if urlsplit(final).path.strip("/") else url  # página inicial não identifica o produto
         real = _store_of(_host(final))
         if real and real != "Loja":
             store = real
