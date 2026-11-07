@@ -19,3 +19,10 @@ def _sem_busca_real(monkeypatch):
 
     monkeypatch.setattr(discovery, "SEARCHERS", {})
     monkeypatch.setattr(discovery, "ZOOM_ENABLED", False)
+
+
+@pytest.fixture(autouse=True)
+def _sem_rede_nos_encurtadores(monkeypatch):
+    from price_watch import offers
+
+    monkeypatch.setattr(offers, "resolve", lambda url: None)

@@ -12,6 +12,8 @@ from price_watch.models import Alert, Offer, Rule, User
 from price_watch.security import hash_password
 from price_watch.telegram import GroupInfo, TelegramManager
 
+REAL_RESOLVE = offers.resolve  # a conftest troca por um falso; este teste usa o verdadeiro
+
 MSG = """🔥 PROMOÇÃO IMPERDÍVEL 🔥
 Kindle 16 GB (Geração 2024) Tela de 6" Preto
 💰 R$ 399 à vista
@@ -167,3 +169,35 @@ def test_diagnostico_conta_os_motivos_de_descarte(clean):
     reasons = dict(s["reasons"])
     assert reasons["sem link de loja"] == 1 and reasons["loja não reconhecida"] == 1 and reasons["virou oferta"] == 1
     assert s["unknown"] == [("loja-nova.com.br", 1)]
+
+
+def test_encurtadores_amazon_e_tenis_certo_sao_reconhecidos(clean):
+    a = offers.parse("Echo Pop por R$ 249 https://link.amazon/abc123")
+    t = offers.parse("Tênis Olympikus Corre 3 por R$ 189 https://tenis.cc/x9Yz")
+    assert (a.store, t.store) == ("Amazon", "Tênis Certo")
+
+
+def test_encurtador_resolvido_define_a_loja_real_e_junta_duplicatas(clean, monkeypatch):
+    monkeypatch.setattr(offers, "resolve", lambda url: "https://www.amazon.com.br/dp/B0ABCDEFGH?tag=x")
+    offers.remember("A", "Echo Pop azul por R$ 249 https://link.amazon/aaa")
+    offers.remember("B", "Echo Pop por R$ 249 https://amzn.to/bbb")          # outro link, mesmo produto
+    with SessionLocal() as db:
+        (o,) = db.query(Offer).all()
+        assert o.store == "Amazon" and o.key == "amz:B0ABCDEFGH" and o.seen_count == 2
+        assert o.url == "https://link.amazon/aaa"                        # o link repassado é o original
+
+
+def test_resolve_segue_redirecionamentos_ate_o_destino(monkeypatch):
+    import httpx
+
+    hops = {"https://tenis.cc/x": "https://teniscerto.com/r/9", "https://teniscerto.com/r/9": "https://www.nike.com.br/tenis-1"}
+
+    def handler(request):
+        loc = hops.get(str(request.url))
+        return httpx.Response(302, headers={"location": loc}) if loc else httpx.Response(200)
+
+    real = httpx.Client
+    monkeypatch.setattr(offers.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    offers._resolved.clear()
+    assert REAL_RESOLVE("https://tenis.cc/x") == "https://www.nike.com.br/tenis-1"
+    assert REAL_RESOLVE("https://tenis.cc/x") == "https://www.nike.com.br/tenis-1"      # segunda vez vem do cache

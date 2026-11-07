@@ -246,7 +246,13 @@ class TelegramManager:
             return
         text = event.raw_text or ""
         links = _hidden_links(event)
-        await self._capture_offer(event, group, text + links)
+        try:
+            await self._alerts(event, group, text, links)
+        finally:  # a oferta é registrada depois dos avisos: resolver links encurtados pode levar segundos
+            await self._capture_offer(event, group, text + links)
+
+    async def _alerts(self, event, group: "GroupInfo", text: str, links: str) -> None:
+        chat_id = event.chat_id
         hits = match_message(text, chat_id, self.rules)
         if any(h.item_id for h in hits):
             qty = pack_qty(text)  # promoção da unidade avulsa não serve para a caixa (e vice-versa)

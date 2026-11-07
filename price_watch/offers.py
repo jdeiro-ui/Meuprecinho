@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from urllib.parse import urlsplit
 
+import httpx
 from sqlalchemy import delete, or_, select
 
 from . import affiliate, mercadolivre
@@ -34,7 +35,8 @@ _SHORTENERS = ("bit.ly", "tinyurl.com", "cutt.ly", "is.gd", "t.ly", "shre.ly", "
 _ALIASES = {"amzn.to": "Amazon", "amzn.com": "Amazon", "a.co": "Amazon", "meli.la": "Mercado Livre",
             "mercadolibre.com": "Mercado Livre", "mercadolivre.com": "Mercado Livre",
             "magalu.com": "Magalu", "magazinevoce.com.br": "Magalu", "shope.ee": "Shopee",
-            "shopee.com.br": "Shopee", "aliexpress.com": "AliExpress", "s.click.aliexpress.com": "AliExpress"}
+            "shopee.com.br": "Shopee", "aliexpress.com": "AliExpress", "s.click.aliexpress.com": "AliExpress",
+            "link.amazon": "Amazon", "tenis.cc": "Tênis Certo"}
 _STORES = {s["domain"]: s["name"] for s in CATALOG} | _ALIASES
 
 _PRICE_TOKEN = re.compile(r"R\$\s*\d[\d.,]*(?:\s*(?:à vista|no pix|no boleto|no cartão))?", re.I)
@@ -76,6 +78,43 @@ def first_store_url(text: str) -> str | None:
         if not any(h == d or h.endswith("." + d) for d in _SOCIAL) and _store_of(h):
             return u
     return None
+
+
+# Encurtadores de loja: seguimos o redirecionamento para saber a loja real e juntar duplicatas
+_RESOLVE = ("link.amazon", "amzn.to", "amzn.com", "a.co", "tenis.cc", "meli.la", *_SHORTENERS)
+_resolved: dict[str, str | None] = {}
+_UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36"
+
+
+def _is_short(host: str) -> bool:
+    return any(host == d or host.endswith("." + d) for d in _RESOLVE)
+
+
+def resolve(url: str) -> str | None:
+    """Destino final de um link encurtado (para ao chegar numa loja conhecida, sem abri-la)."""
+    if url in _resolved:
+        return _resolved[url]
+    final = None
+    try:
+        with httpx.Client(timeout=4, headers={"User-Agent": _UA}) as c:
+            cur = url
+            for _ in range(6):
+                r = c.get(cur)
+                nxt = r.headers.get("location") if 300 <= r.status_code < 400 else None
+                if not nxt:
+                    break
+                cur = str(httpx.URL(cur).join(nxt))
+                host = _host(cur)
+                if not _is_short(host) and _store_of(host) not in (None, "Loja"):
+                    break  # chegou numa loja: não precisamos abrir a página dela
+            if cur != url:
+                final = cur
+    except (httpx.HTTPError, ValueError):
+        pass
+    if len(_resolved) > 3000:
+        _resolved.clear()
+    _resolved[url] = final
+    return final
 
 
 def _key(url: str) -> str:
@@ -135,9 +174,14 @@ def _parse(text: str) -> tuple[Parsed | None, str, str | None]:
     price, coupon = price_in_text(text), _coupon(text)
     if not (price or coupon):
         return None, "sem preço nem cupom", None
-    store = _store_of(_host(url)) or "Loja"
+    store, target = _store_of(_host(url)) or "Loja", url
+    if _is_short(_host(url)) and (final := resolve(url)):
+        target = final
+        real = _store_of(_host(final))
+        if real and real != "Loja":
+            store = real
     title = _name(text) or f"Oferta {store}"
-    return Parsed(title, price, coupon, store, url, _key(url)), "virou oferta", None
+    return Parsed(title, price, coupon, store, url, _key(target)), "virou oferta", None
 
 
 def parse(text: str) -> Parsed | None:
