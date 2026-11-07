@@ -126,18 +126,54 @@ def _key(url: str) -> str:
     return f"u:{host}{urlsplit(url).path.rstrip('/').lower()}"[:160]
 
 
-def _name(text: str) -> str | None:
+_BRANDS = {"adidas", "nike", "puma", "olympikus", "mizuno", "asics", "fila", "vans", "converse", "samsung", "apple",
+           "iphone", "xiaomi", "motorola", "philips", "jbl", "lg", "sony", "lenovo", "dell", "asus", "acer", "hp",
+           "positivo", "multilaser", "logitech", "redragon", "hyperx", "razer", "kindle", "echo", "alexa", "playstation",
+           "xbox", "nintendo", "switch", "electrolux", "brastemp", "consul", "mondial", "britania", "oster", "arno",
+           "tramontina", "havaianas", "melissa", "lacoste", "oakley", "garmin", "amazfit", "realme", "poco", "tcl",
+           "aoc", "gigabyte", "kingston", "sandisk", "seagate", "intel", "amd", "nvidia", "bose", "anker", "baseus"}
+_CHANNEL_PROMO = re.compile(r"(?i)\b(entre|participe|siga|grupo|canal|compartilh\w*|inscreva\w*|instagram|whatsapp|"
+                            r"divulga\w*|n[aã]o perca|ative as notifica\w*|clique (?:no|em|aqui))")
+
+
+def _lines(text: str) -> list[str]:
+    """Linhas úteis da mensagem: sem links, preço, cupom, emojis nem chamadas do canal."""
+    out = []
     for raw in text.splitlines():
         line = _COUPON_LINE.sub("", _PRICE_TOKEN.sub("", _URL.sub("", raw)))
-        line = re.sub(r"[^\wÀ-ÿ%&+\-.,/()\" ]+", " ", line)
+        line = re.sub(r"[^\w\u00C0-\u00FF%&+\-.,/()\":! ]+", " ", line)
         line = " ".join(line.split()).strip(" -–:|.,")
         line = _TRAIL.sub("", line).strip(" -–:|.,")
-        if len(line) < 10 or sum(c.isalpha() for c in line) < 8:
+        if len(line) < 5 or sum(c.isalpha() for c in line) < 4 or _CHANNEL_PROMO.search(line):
             continue
-        if _GENERIC.match(line) and len(line.split()) <= 4:
-            continue
-        return scrub(line)[:100] or None
-    return None
+        if scrubbed := scrub(line):
+            out.append(scrubbed)
+    return out
+
+
+def _score(line: str) -> int:
+    words = normalize(line).split()
+    s = 3 * any(w in _BRANDS for w in words) + bool(re.search(r"\d", line)) + (12 <= len(line) <= 90)
+    if _GENERIC.match(line) and len(words) <= 4:
+        s -= 4
+    return s
+
+
+def _name_and_details(text: str) -> tuple[str | None, str]:
+    """Título = a linha que mais parece o produto (marca, modelo, medidas); o resto vira detalhes."""
+    lines = [ln for ln in _lines(text) if len(ln) >= 10 and sum(c.isalpha() for c in ln) >= 8]
+    if not lines:
+        return None, ""
+    best = max(range(len(lines)), key=lambda i: (_score(lines[i]), -i))
+    title = lines[best][:100]
+    rest = [ln[:120] for i, ln in enumerate(lines) if i != best and not (_GENERIC.match(ln) and len(ln.split()) <= 4)]
+    details, used = [], 0
+    for ln in rest[:4]:
+        if used + len(ln) > 240:
+            break
+        details.append(ln)
+        used += len(ln)
+    return title, "\n".join(details)
 
 
 def _coupon(text: str) -> str | None:
@@ -160,6 +196,7 @@ class Parsed:
     store: str
     url: str
     key: str
+    details: str = ""
 
 
 def _parse(text: str) -> tuple[Parsed | None, str, str | None]:
@@ -180,8 +217,9 @@ def _parse(text: str) -> tuple[Parsed | None, str, str | None]:
         real = _store_of(_host(final))
         if real and real != "Loja":
             store = real
-    title = _name(text) or f"Oferta {store}"
-    return Parsed(title, price, coupon, store, url, _key(target)), "virou oferta", None
+    name, details = _name_and_details(text)
+    title = name or f"Oferta {store}"
+    return Parsed(title, price, coupon, store, url, _key(target), details), "virou oferta", None
 
 
 def parse(text: str) -> Parsed | None:
@@ -219,12 +257,13 @@ def remember(source_title: str, text: str) -> Result | None:
                       .order_by(Offer.updated_at.desc()))
         if o is None:
             o = Offer(key=p.key, title_key=tkey, title=p.title, search=normalize(p.title)[:200], price_cents=p.price, coupon=p.coupon,
-                      store=p.store, url=p.url, source_title=source_title[:255])
+                      store=p.store, url=p.url, details=p.details, source_title=source_title[:255])
             db.add(o)
         else:
             if p.price and (o.price_cents is None or p.price < o.price_cents):
                 o.old_price_cents, o.price_cents = o.price_cents, p.price
             o.coupon = o.coupon or p.coupon
+            o.details = o.details or p.details
             o.seen_count += 1
             o.updated_at = now
         db.commit()

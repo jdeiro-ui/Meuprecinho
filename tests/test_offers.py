@@ -209,3 +209,27 @@ def test_destino_generico_nao_junta_ofertas_diferentes(clean, monkeypatch):
     offers.remember("A", "Chinelo Rider Bay por R$ 59 https://tenis.cc/bbb")
     with SessionLocal() as db:
         assert db.query(Offer).count() == 2
+
+
+TENIS = """🔥 O CLÁSSICO 3 LISTRAS
+👟 Tênis Adidas Superstar Branco
+Tamanhos 38 ao 44
+💰 R$ 163
+🎟️ Cupom: MODAAQUI
+Frete grátis acima de R$ 199
+Entre no nosso grupo: https://t.me/meucanal
+https://tenis.cc/x"""
+
+
+def test_titulo_prefere_a_linha_do_produto_e_o_resto_vira_detalhes():
+    p = offers.parse(TENIS)
+    assert p.title == "Tênis Adidas Superstar Branco"
+    assert "O CLÁSSICO 3 LISTRAS" in p.details and "Tamanhos 38 ao 44" in p.details
+    assert "t.me" not in p.details and "grupo" not in p.details and "MODAAQUI" not in p.details
+    assert (p.price, p.coupon) == (16300, "MODAAQUI")
+
+
+def test_detalhes_aparecem_no_cartao(clean):
+    offers.remember("G", TENIS)
+    with SessionLocal() as db:
+        assert "Tamanhos 38 ao 44" in db.query(Offer).one().details

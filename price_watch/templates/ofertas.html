@@ -27,6 +27,7 @@
   {% if o.image %}<img class="offer-img" src="/ofertas/img/{{ o.id }}" loading="lazy" alt="">{% endif %}
   <div class="offer-body">
     <strong class="offer-title">{{ o.title }}</strong>
+    {% if o.details %}<p class="offer-details">{{ o.details }}</p>{% endif %}
     <div class="price-row">
       {% if o.price_cents %}<span class="price">{{ o.price_cents|brl }}</span>{% endif %}
       {% if o.old_price_cents %}<s class="muted">{{ o.old_price_cents|brl }}</s>{% endif %}

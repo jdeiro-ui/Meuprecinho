@@ -381,3 +381,4 @@ form.actions .btn + .btn { margin-left: 6px; }
   background: var(--hot-soft); color: var(--hot-ink); font-size: .85rem; font-weight: 600;
   box-shadow: 0 6px 18px rgba(30, 20, 80, .12);
 }
+.offer-details { margin: 4px 0 2px; color: var(--muted); font-size: .88rem; white-space: pre-line; overflow-wrap: anywhere; }

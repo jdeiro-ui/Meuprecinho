@@ -257,6 +257,7 @@ class Offer(Base):
     price_cents: Mapped[int | None] = mapped_column(Integer)
     old_price_cents: Mapped[int | None] = mapped_column(Integer)
     coupon: Mapped[str | None] = mapped_column(String(40))
+    details: Mapped[str] = mapped_column(Text, default="")  # linhas úteis da mensagem (condições, tamanhos…)
     store: Mapped[str] = mapped_column(String(40))
     url: Mapped[str] = mapped_column(String(700))
     image: Mapped[bool] = mapped_column(Boolean, default=False)

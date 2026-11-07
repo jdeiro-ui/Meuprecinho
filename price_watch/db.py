@@ -34,6 +34,7 @@ def get_db() -> Iterator[Session]:
 
 # Colunas acrescentadas depois da primeira versão (create_all não altera tabelas)
 _NEW_COLUMNS = [
+    ("offers", "details", "TEXT NOT NULL DEFAULT ''", None),
     ("stores", "price_selector", "VARCHAR(255)", None),
     # Ao surgir o coletor de casa, lojas conhecidas por bloquear servidores passam a usá-lo
     ("stores", "fetch_via", "VARCHAR(8) NOT NULL DEFAULT 'vm'",
