@@ -13,6 +13,15 @@
   {% for s in stores %}<a class="chip {{ 'hot' if s == loja }}" href="/ofertas?loja={{ s|urlencode }}{{ '&q=' ~ (q|urlencode) if q }}">{{ s }}</a>{% endfor %}
 </div>
 {% endif %}
+{% if diag %}
+<details class="card diag">
+  <summary class="link-like">Diagnóstico (só você vê): {{ diag.total }} mensagens lidas nas últimas 24 h</summary>
+  {% for reason, n in diag.reasons %}<p class="hint"><b>{{ n }}</b> · {{ reason }}</p>{% else %}<p class="hint">Nenhuma mensagem lida desde que o app iniciou.</p>{% endfor %}
+  {% if diag.unknown %}<p class="hint">Lojas não reconhecidas: {% for h, n in diag.unknown %}{{ h }} ({{ n }}){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+</details>
+{% endif %}
+<div id="feed" hx-get="/ofertas?q={{ q|urlencode }}&loja={{ loja|urlencode }}&p={{ page }}"
+     hx-trigger="every 30s [document.visibilityState=='visible']" hx-select="#feed" hx-swap="outerHTML">
 {% for o in offers %}
 <article class="card offer">
   {% if o.image %}<img class="offer-img" src="/ofertas/img/{{ o.id }}" loading="lazy" alt="">{% endif %}
@@ -41,6 +50,7 @@
 {% else %}
 <div class="empty">{{ icon('flame', 40) }}<p>Nenhuma oferta {{ 'encontrada' if q or loja else 'ainda' }}.</p><small>As promoções aparecem aqui assim que forem encontradas.</small></div>
 {% endfor %}
+</div>
 {% if more %}<a class="btn ghost block" href="/ofertas?p={{ page + 1 }}{{ '&q=' ~ (q|urlencode) if q }}{{ '&loja=' ~ (loja|urlencode) if loja }}">Ver mais</a>{% endif %}
 <p class="disclosure">{{ disclosure }}</p>
 {% endblock %}

@@ -9,6 +9,7 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from telethon import TelegramClient, events
+from telethon.tl.types import MessageEntityTextUrl
 from telethon.errors import (
     ApiIdInvalidError,
     FloodWaitError,
@@ -70,6 +71,7 @@ class TelegramManager:
             device_model="MeuPrecinho",
         )
         client.add_event_handler(self._on_message, events.NewMessage(incoming=True))
+        client.add_event_handler(self._on_edit, events.MessageEdited(incoming=True))
         return client
 
     async def start(self) -> None:
@@ -218,6 +220,12 @@ class TelegramManager:
                 for r in rules
             ]
 
+    async def _on_edit(self, event) -> None:
+        """Canais costumam postar e depois editar para pôr o link/preço: a oferta é registrada de novo."""
+        group = self.groups.get(event.chat_id)
+        if group is not None:
+            await self._capture_offer(event, group, (event.raw_text or "") + _hidden_links(event))
+
     async def _capture_offer(self, event, group: "GroupInfo", text: str) -> None:
         """Alimenta a aba Ofertas; uma falha aqui nunca pode atrapalhar os avisos."""
         try:
@@ -237,7 +245,8 @@ class TelegramManager:
         if group is None:  # ignora tudo que não foi marcado
             return
         text = event.raw_text or ""
-        await self._capture_offer(event, group, text)
+        links = _hidden_links(event)
+        await self._capture_offer(event, group, text + links)
         hits = match_message(text, chat_id, self.rules)
         if any(h.item_id for h in hits):
             qty = pack_qty(text)  # promoção da unidade avulsa não serve para a caixa (e vice-versa)
@@ -255,7 +264,7 @@ class TelegramManager:
         by_user: dict[int | None, list] = {}
         for h in hits:  # um aviso por usuário, com todas as regras dele que bateram
             by_user.setdefault(h.user_id, []).append(h)
-        store_link = offers.first_store_url(text)
+        store_link = offers.first_store_url(text + links)
         for user_id, user_hits in by_user.items():
             admin = user_id is None or user_id in self.admins
             shown = group.title if admin else offers.GENERIC_SOURCE  # convidado não vê de qual canal veio
@@ -283,6 +292,18 @@ class TelegramManager:
                                                "Abrir mensagem" if admin else "Ver oferta"),
                 title=title, body=f"{shown}: {trecho}" if admin else trecho, url=url, tag=key)
             await asyncio.to_thread(_save_alert, shown, keywords, trecho, out_link, ok, user_id, key, msg_price)
+
+
+def _hidden_links(event) -> str:
+    """Links que não aparecem no texto: palavras com hiperlink ("Comprar aqui") e botões da mensagem."""
+    urls: list[str] = []
+    try:
+        msg = getattr(event, "message", event)
+        urls += [e.url for e, _ in (msg.get_entities_text(MessageEntityTextUrl) or []) if getattr(e, "url", None)]
+        urls += [b.url for row in (getattr(msg, "buttons", None) or []) for b in row if getattr(b, "url", None)]
+    except Exception:  # noqa: BLE001 — mensagem estranha não pode quebrar o listener
+        return ""
+    return "".join(f"\n{u}" for u in dict.fromkeys(urls))
 
 
 DEDUP_WINDOW = timedelta(hours=24)

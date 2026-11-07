@@ -141,3 +141,29 @@ def test_aviso_do_convidado_nao_revela_o_canal(monkeypatch, clean):
         a = db.query(Alert).filter_by(user_id=uid).one()
         assert a.group_title == offers.GENERIC_SOURCE and "t.me" not in (a.link or "") and "Canal" not in a.snippet
         assert db.query(Offer).count() == 1                      # a mesma mensagem também alimentou o feed
+
+
+def test_link_escondido_em_hiperlink_ou_botao_entra_na_oferta(clean):
+    from price_watch.telegram import _hidden_links
+
+    class Msg:
+        buttons = [[SimpleNamespace(url="https://www.magazineluiza.com.br/p/abc"), SimpleNamespace(url=None)]]
+
+        def get_entities_text(self, kind):
+            return [(SimpleNamespace(url="https://amzn.to/xyz"), "Comprar aqui")]
+
+    links = _hidden_links(SimpleNamespace(message=Msg()))
+    assert "https://amzn.to/xyz" in links and "magazineluiza" in links
+    p = offers.parse("Echo Dot 5ª geração por R$ 279\nComprar aqui" + links)
+    assert (p.store, p.price) == ("Amazon", 27900)
+
+
+def test_diagnostico_conta_os_motivos_de_descarte(clean):
+    offers._seen.clear()
+    offers.remember("G", "bom dia grupo!")
+    offers.remember("G", "Veja https://loja-nova.com.br/p/1 por R$ 50")
+    offers.remember("G", MSG)
+    s = offers.stats()
+    reasons = dict(s["reasons"])
+    assert reasons["sem link de loja"] == 1 and reasons["loja não reconhecida"] == 1 and reasons["virou oferta"] == 1
+    assert s["unknown"] == [("loja-nova.com.br", 1)]

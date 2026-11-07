@@ -6,6 +6,7 @@ para o administrador."""
 
 import logging
 import re
+from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import timedelta
 from urllib.parse import urlsplit
@@ -122,20 +123,37 @@ class Parsed:
     key: str
 
 
-def parse(text: str) -> Parsed | None:
-    """Dados da oferta numa mensagem, ou None se não parece uma oferta com link de loja."""
+def _parse(text: str) -> tuple[Parsed | None, str, str | None]:
+    """(oferta, motivo, domínio desconhecido). O motivo explica por que uma mensagem não virou oferta."""
     urls = _urls(text)
     if len({_host(u) for u in urls}) >= 3:  # listas de vários produtos/cupons: não cabem num cartão
-        return None
+        return None, "lista de vários links", None
     url = first_store_url(text)
     if not url:
-        return None
+        others = [_host(u) for u in urls if not any(_host(u) == d or _host(u).endswith("." + d) for d in _SOCIAL)]
+        return None, ("loja não reconhecida" if others else "sem link de loja"), (others[0] if others else None)
     price, coupon = price_in_text(text), _coupon(text)
     if not (price or coupon):
-        return None
+        return None, "sem preço nem cupom", None
     store = _store_of(_host(url)) or "Loja"
     title = _name(text) or f"Oferta {store}"
-    return Parsed(title, price, coupon, store, url, _key(url))
+    return Parsed(title, price, coupon, store, url, _key(url)), "virou oferta", None
+
+
+def parse(text: str) -> Parsed | None:
+    """Dados da oferta numa mensagem, ou None se não parece uma oferta com link de loja."""
+    return _parse(text)[0]
+
+
+# Diagnóstico (só contagens em memória, sem texto de mensagens): por que as mensagens são descartadas
+_seen: deque = deque(maxlen=2000)
+
+
+def stats(hours: int = 24) -> dict:
+    since = utcnow() - timedelta(hours=hours)
+    rows = [r for r in _seen if r[0] >= since]
+    return {"total": len(rows), "reasons": Counter(r[1] for r in rows).most_common(),
+            "unknown": Counter(r[2] for r in rows if r[2]).most_common(5)}
 
 
 @dataclass
@@ -145,7 +163,8 @@ class Result:
 
 
 def remember(source_title: str, text: str) -> Result | None:
-    p = parse(text)
+    p, reason, unknown = _parse(text)
+    _seen.append((utcnow(), reason, unknown))
     if p is None:
         return None
     tkey, now = _title_key(p.title), utcnow()

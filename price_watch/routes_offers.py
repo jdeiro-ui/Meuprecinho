@@ -21,7 +21,7 @@ def feed_page(request: Request, db: DB, me: Me, q: str = "", loja: str = "", p: 
     p = max(p, 0)
     items = offers.feed(db, q.strip(), loja, limit=PAGE + 1, offset=p * PAGE)
     return render(request, "ofertas.html", offers=items[:PAGE], more=len(items) > PAGE, page=p, q=q, loja=loja,
-                  stores=offers.stores_in_feed(db))
+                  stores=offers.stores_in_feed(db), diag=offers.stats() if me.is_admin else None)
 
 
 @router.get("/ofertas/img/{offer_id}")
