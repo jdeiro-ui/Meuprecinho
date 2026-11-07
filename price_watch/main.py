@@ -365,6 +365,22 @@ def _base(request: Request) -> str:
     return base
 
 
+@app.post("/modo-convidado/entrar")
+def guest_mode_on(request: Request, db: DB):
+    user = db.get(User, request.session.get("uid") or 0)  # sem current_user: precisa do papel real
+    if user is None or not user.is_admin:
+        return back("/")
+    request.session["guest_view"] = True
+    return back("/")
+
+
+@app.post("/modo-convidado/sair", dependencies=[Auth])
+def guest_mode_off(request: Request):
+    request.session.pop("guest_view", None)
+    flash(request, "Você voltou ao modo administrador")
+    return back("/telegram")
+
+
 @app.get("/telegram")
 async def telegram_page(request: Request, db: DB, me: Me):
     ctx = {"bot_link": await bot.connect_link(me.id) if not me.telegram_chat_id else None,

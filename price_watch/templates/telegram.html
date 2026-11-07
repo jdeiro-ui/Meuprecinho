@@ -50,6 +50,13 @@
 </section>
 
 {% if me.is_admin %}
+<section class="card" id="modo-convidado">
+  <h2>Modo convidado</h2>
+  <p class="hint">Veja o app como um convidado vê: sem Grupos, Produtos e Lojas, e sem o nome dos canais.
+    É só visual; nada muda na sua conta. Para voltar, use a barra no topo.</p>
+  <form method="post" action="/modo-convidado/entrar"><button class="btn soft">Entrar no modo convidado</button></form>
+</section>
+
 <h2 class="section-title" id="convites">Convites</h2>
 <section class="card">
   <form method="post" action="/convites" class="invite-form">

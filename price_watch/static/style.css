@@ -373,3 +373,11 @@ form.actions .btn + .btn { margin-left: 6px; }
 .coupon b { letter-spacing: .04em; }
 .coupon small { opacity: .75; }
 .offer .row-actions { flex-wrap: wrap; margin-top: 12px; }
+
+/* modo convidado do administrador */
+.guest-bar {
+  position: sticky; top: 8px; z-index: 20; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin: 0 0 12px; padding: 8px 8px 8px 14px; border-radius: 14px;
+  background: var(--hot-soft); color: var(--hot-ink); font-size: .85rem; font-weight: 600;
+  box-shadow: 0 6px 18px rgba(30, 20, 80, .12);
+}

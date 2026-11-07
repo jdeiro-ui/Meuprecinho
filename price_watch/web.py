@@ -9,6 +9,7 @@ from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
 from .config import get_settings
 from .db import get_db
@@ -86,6 +87,9 @@ def current_user(request: Request, db: Annotated[Session, Depends(get_db)]) -> U
     if user is None:  # conta removida com a sessão ainda aberta
         request.session.clear()
         raise LoginRequired
+    if user.is_admin and request.session.get("guest_view"):
+        # Modo convidado do administrador: vale só nesta requisição e nunca é gravado no banco
+        set_committed_value(user, "is_admin", False)
     request.state.user = user
     return user
 

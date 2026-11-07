@@ -11,7 +11,7 @@
 {% for a in alerts %}
 <article class="card alert-card {{ a.source }}">
   <header>
-    <strong class="title">{{ a.group_title }}</strong>
+    <strong class="title">{{ a.group_title if me.is_admin or a.source == 'price' else 'Oferta encontrada' }}</strong>
     <time>{{ a.created_at|local }}</time>
   </header>
   <div class="chips">
@@ -21,7 +21,7 @@
   </div>
   <p class="snippet">{{ a.snippet }}</p>
   {% if a.also_in and me.is_admin %}<p class="hint">Também em: {{ a.also_in }}</p>{% endif %}
-  {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener{{ ' sponsored' if a.source == 'price' }}" class="btn soft small">{{ icon('external', 16) }} {{ 'Comprar na loja' if a.source == 'price' else ('Abrir no Telegram' if me.is_admin else 'Ver oferta') }}</a>{% endif %}
+  {% if a.link and (me.is_admin or 't.me/' not in a.link) %}<a href="{{ a.link }}" target="_blank" rel="noopener{{ ' sponsored' if a.source == 'price' }}" class="btn soft small">{{ icon('external', 16) }} {{ 'Comprar na loja' if a.source == 'price' else ('Abrir no Telegram' if me.is_admin else 'Ver oferta') }}</a>{% endif %}
 </article>
 {% else %}
 <div class="empty">{{ icon('bell', 40) }}<p>Nenhum aviso ainda.</p><small>Ofertas que combinam com as suas regras aparecem aqui e nas suas notificações.</small></div>

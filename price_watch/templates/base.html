@@ -27,6 +27,11 @@
   </header>
   {% endif %}
   <main>
+    {% if request.session.get('guest_view') %}
+    <form method="post" action="/modo-convidado/sair" class="guest-bar">
+      <span>👀 Modo convidado: é assim que um convidado vê o app</span><button class="btn small">Sair</button>
+    </form>
+    {% endif %}
     {% if flash %}
     <div class="toast {{ flash.kind }}" role="status">{{ icon('check' if flash.kind == 'ok' else 'alert', 20) }}<span>{{ flash.msg }}</span></div>
     {% endif %}
