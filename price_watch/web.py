@@ -49,6 +49,7 @@ def _local(dt: datetime | None, fmt: str = "%d/%m %H:%M") -> str:
     return dt.astimezone(_TZ).strftime(fmt)
 
 
+templates.env.globals["asset_v"] = int((BASE / "static/style.css").stat().st_mtime)
 templates.env.filters["local"] = _local
 templates.env.globals["buy_link"] = lambda p: f"/r/{p.id}?s={click_sig(p.id)}"
 templates.env.filters["brl"] = format_brl
