@@ -63,6 +63,9 @@ def remember_app_url(url: str) -> None:
         if row is None:
             db.add(Setting(key="app_url", value=url))
             db.commit()
+        elif row.value != url:  # o endereço do app mudou (ex.: saída do Tailscale para o domínio público)
+            row.value = url
+            db.commit()
 
 
 def _subject() -> str:

@@ -109,3 +109,12 @@ def test_conectar_bot_com_canal_app_passa_a_ambos(user):
     bot.handle_text("999", f"/start {token}")
     with SessionLocal() as db:
         assert db.get(User, user).notify_channel == "both"
+
+
+def test_endereco_do_app_e_atualizado_quando_muda():
+    init_db()
+    push.remember_app_url("https://antigo.ts.net")
+    push.remember_app_url("https://meuprecinho.com.br")
+    with SessionLocal() as db:
+        from price_watch.models import Setting
+        assert db.get(Setting, "app_url").value == "https://meuprecinho.com.br"
