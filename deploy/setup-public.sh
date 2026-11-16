@@ -31,11 +31,11 @@ ok "$DOMAIN aponta para esta VM ($EXT)"
 
 # 3) Caddy
 if ! command -v caddy >/dev/null; then
-  apt-get update -qq && apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl gpg
+  apt-get update -q >/dev/null && apt-get install -y -q ca-certificates curl gpg apt-transport-https >/dev/null
   curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
     > /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update -qq && apt-get install -y -qq caddy
+  apt-get update -q >/dev/null && apt-get install -y -q caddy >/dev/null
 fi
 ok "Caddy instalado ($(caddy version | cut -d' ' -f1))"
 
