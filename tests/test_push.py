@@ -118,3 +118,28 @@ def test_endereco_do_app_e_atualizado_quando_muda():
     with SessionLocal() as db:
         from price_watch.models import Setting
         assert db.get(Setting, "app_url").value == "https://meuprecinho.com.br"
+
+
+def test_arroba_do_bot_e_relido_depois_de_uma_hora(monkeypatch):
+    from price_watch import bot
+
+    names = iter(["antigo_bot", "novo_bot"])
+
+    class R:
+        status_code = 200
+        def json(self):
+            return {"result": {"username": next(names)}}
+
+    class C:
+        def __init__(self, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url): return R()
+
+    monkeypatch.setattr(bot.httpx, "AsyncClient", C)
+    monkeypatch.setattr(bot.get_settings(), "BOT_TOKEN", "x")
+    monkeypatch.setattr(bot, "_username", None)
+    assert asyncio.run(bot.username()) == "antigo_bot"
+    assert asyncio.run(bot.username()) == "antigo_bot"            # em cache
+    monkeypatch.setattr(bot, "_username_at", bot._username_at - 4000)
+    assert asyncio.run(bot.username()) == "novo_bot"

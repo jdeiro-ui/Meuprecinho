@@ -5,6 +5,7 @@ Conta e grava a conversa do usuário. /parar desliga os avisos."""
 
 import asyncio
 import logging
+import time
 import secrets
 
 import httpx
@@ -16,6 +17,7 @@ from .models import User
 
 log = logging.getLogger(__name__)
 _username: str | None = None
+_username_at = 0.0  # quando foi lido; renovado a cada hora (o @ do bot pode mudar no BotFather)
 transport: httpx.AsyncBaseTransport | None = None  # para testes
 
 
@@ -25,13 +27,13 @@ def _api(method: str) -> str:
 
 async def username() -> str | None:
     """@ do bot (para montar o link de conexão)."""
-    global _username
-    if _username is None and get_settings().BOT_TOKEN:
+    global _username, _username_at
+    if (_username is None or time.monotonic() - _username_at > 3600) and get_settings().BOT_TOKEN:
         try:
             async with httpx.AsyncClient(timeout=15, transport=transport) as c:
                 r = await c.get(_api("getMe"))
             if r.status_code == 200:
-                _username = r.json()["result"]["username"]
+                _username, _username_at = r.json()["result"]["username"], time.monotonic()
         except (httpx.HTTPError, KeyError, ValueError):
             pass
     return _username
