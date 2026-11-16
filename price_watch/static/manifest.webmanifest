@@ -8,8 +8,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#4f35d8",
-  "theme_color": "#4f35d8",
+  "background_color": "#1c3464",
+  "theme_color": "#1c3464",
   "share_target": {
     "action": "/share",
     "method": "GET",

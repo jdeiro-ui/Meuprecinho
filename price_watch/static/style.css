@@ -1,15 +1,15 @@
-/* Gerto: paleta tirada do ícone (roxo, laranja, amarelo) */
+/* Gerto: paleta tirada do ícone (azul, ciano, amarelo do sino) */
 :root {
-  --bg: #f4f2fc;
+  --bg: #f0f4fc;
   --surface: #ffffff;
-  --surface-2: #f7f5ff;
-  --text: #1c1736;
-  --muted: #6b6790;
-  --line: #e6e2f5;
-  --brand: #4f35d8;
-  --brand-2: #7b3fe4;
-  --brand-soft: #ece8ff;
-  --brand-ink: #3d27b8;
+  --surface-2: #f4f7ff;
+  --text: #0f1b3a;
+  --muted: #5b6a8c;
+  --line: #dde6f6;
+  --brand: #2f5bea;
+  --brand-2: #19a7f5;
+  --brand-soft: #e5edff;
+  --brand-ink: #1c42bd;
   --hot: #ff8a1f;
   --hot-soft: #fff1e2;
   --hot-ink: #b35400;
@@ -18,25 +18,25 @@
   --ok-soft: #e3f7ec;
   --danger: #e5484d;
   --danger-soft: #fdecec;
-  --hero-1: #4f35d8;
-  --hero-2: #7b3fe4;
-  --shadow: 0 1px 2px rgba(40, 24, 120, .06), 0 8px 24px rgba(40, 24, 120, .07);
+  --hero-1: #1f3fae;
+  --hero-2: #2f6fe8;
+  --shadow: 0 1px 2px rgba(20, 44, 120, .06), 0 8px 24px rgba(20, 44, 120, .07);
   --radius: 20px;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f0c1f;
-    --surface: #1a1631;
-    --surface-2: #221d3e;
-    --text: #efecff;
-    --muted: #a29dc4;
-    --line: #2d2754;
-    --brand: #8b74ff;
-    --brand-2: #a77bff;
-    --brand-soft: #2a2257;
-    --brand-ink: #c5b8ff;
+    --bg: #0a1226;
+    --surface: #121c38;
+    --surface-2: #19254a;
+    --text: #e8eeff;
+    --muted: #98a6cc;
+    --line: #243158;
+    --brand: #6f9bff;
+    --brand-2: #35c2ff;
+    --brand-soft: #1c2c5c;
+    --brand-ink: #b8ceff;
     --hot: #ffa045;
     --hot-soft: #3a2614;
     --hot-ink: #ffc58a;
@@ -44,8 +44,8 @@
     --ok-soft: #12301f;
     --danger: #ff6b6f;
     --danger-soft: #3a1618;
-    --hero-1: #2a1d7a;
-    --hero-2: #4a2394;
+    --hero-1: #12245c;
+    --hero-2: #1e4fa8;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
     color-scheme: dark;
   }
@@ -305,7 +305,7 @@ label.check input { width: 22px; height: 22px; margin: 0; accent-color: var(--br
 .steps { padding-left: 20px; margin: 10px 0; }
 .steps li { margin: 6px 0; }
 .cmd {
-  background: #120e26; color: #d9d2ff; border-radius: 12px; padding: 12px; margin: 8px 0;
+  background: #0a1226; color: #d5e2ff; border-radius: 12px; padding: 12px; margin: 8px 0;
   font: .8rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere;
 }
 .cmd code { background: none; color: inherit; padding: 0; font-size: inherit; }
@@ -379,6 +379,6 @@ form.actions .btn + .btn { margin-left: 6px; }
   position: sticky; top: 8px; z-index: 20; display: flex; align-items: center; justify-content: space-between;
   gap: 10px; margin: 0 0 12px; padding: 8px 8px 8px 14px; border-radius: 14px;
   background: var(--hot-soft); color: var(--hot-ink); font-size: .85rem; font-weight: 600;
-  box-shadow: 0 6px 18px rgba(30, 20, 80, .12);
+  box-shadow: 0 6px 18px rgba(15, 30, 90, .12);
 }
 .offer-details { margin: 4px 0 2px; color: var(--muted); font-size: .88rem; white-space: pre-line; overflow-wrap: anywhere; }
