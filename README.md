@@ -1,6 +1,6 @@
-# MeuPrecinho
+# Gerto
 
-(código e pacote Python: `price_watch`)
+(o código e o pacote Python continuam com o nome interno `price_watch`)
 
 Web app pessoal (PWA, mobile-first) que:
 
@@ -82,7 +82,7 @@ trecho e link (grupos básicos, que não são supergrupos, não têm link de men
 
 ## Preços (fase 3)
 
-- **Produtos**: cole o link do produto ou, com o app instalado, use *Compartilhar → MeuPrecinho*
+- **Produtos**: cole o link do produto ou, com o app instalado, use *Compartilhar → Gerto*
   no app da loja. Preço-alvo é opcional: com alvo, avisa ao ficar abaixo dele (e de novo se cair
   mais); sem alvo, avisa quando bate o menor preço já visto. Produto indisponível não gera aviso.
 - **Lojas**: sugestões das principais lojas brasileiras; uma loja também é criada sozinha ao

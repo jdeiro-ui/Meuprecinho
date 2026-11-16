@@ -70,8 +70,8 @@ class ProductsClosed(Exception):
     """Monitor de lojas (Produtos) fechado para convidados no soft launch."""
 
 
-DISCLOSURE = ("O MeuPrecinho é gratuito. Compras feitas pelos links do app podem gerar créditos "
-              "(comissão) para o MeuPrecinho, sem custo extra para você.")
+DISCLOSURE = ("O Gerto é gratuito. Compras feitas pelos links do app podem gerar créditos "
+              "(comissão) para o Gerto, sem custo extra para você.")
 templates.env.globals["disclosure"] = DISCLOSURE
 
 

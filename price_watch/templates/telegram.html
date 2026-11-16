@@ -213,7 +213,7 @@
     btn.disabled = true;
     try {
       if (await Notification.requestPermission() !== "granted") {
-        pushHint("Permissão negada. Libere as notificações do MeuPrecinho nas configurações do celular.");
+        pushHint("Permissão negada. Libere as notificações do Gerto nas configurações do celular.");
         return;
       }
       const { key } = await (await fetch("/push/key")).json();

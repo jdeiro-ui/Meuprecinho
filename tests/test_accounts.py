@@ -89,7 +89,7 @@ def test_cada_usuario_ve_so_o_que_e_seu_e_mesmo_link_pode_repetir(monkeypatch):
 def test_bot_liga_e_desliga_a_conversa():
     uid = _user("carla")
     token = bot.link_token(uid)
-    assert "abra o MeuPrecinho" in bot.handle_text("555", "/start codigo-errado")
+    assert "abra o Gerto" in bot.handle_text("555", "/start codigo-errado")
     assert "Pronto, <b>carla</b>" in bot.handle_text("555", f"/start {token}")
     with SessionLocal() as db:
         u = db.get(User, uid)

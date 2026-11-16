@@ -54,7 +54,7 @@ def format_price_alert(store: str, name: str, old: int | None, new: int, target:
     parts = [f"💰 <b>{e(name)}</b>", f"{e(store)} · {e(reason)}", "", price]
     if target:
         parts.append(f"Seu alvo: {format_brl(target)}")
-    parts += ["", f'<a href="{e(url, quote=True)}">Comprar na loja</a>', "<i>link de afiliado do MeuPrecinho</i>"]
+    parts += ["", f'<a href="{e(url, quote=True)}">Comprar na loja</a>', "<i>link de afiliado do Gerto</i>"]
     return "\n".join(parts)
 
 

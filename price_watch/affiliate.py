@@ -1,4 +1,4 @@
-"""Links de compra com o código de afiliado do MeuPrecinho.
+"""Links de compra com o código de afiliado do Gerto.
 
 O app guarda o endereço limpo do produto e gera o link de compra na hora, com o
 código de afiliado configurado no .env. Assim, qualquer produto cadastrado por

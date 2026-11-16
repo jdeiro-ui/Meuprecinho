@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#4f35d8" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1d1550" media="(prefers-color-scheme: dark)">
-  <title>{% block title %}MeuPrecinho{% endblock %}</title>
-  <link rel="manifest" href="/manifest.webmanifest?v=4">
+  <title>{% block title %}Gerto{% endblock %}</title>
+  <link rel="manifest" href="/manifest.webmanifest?v=5">
   <link rel="icon" href="/static/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
@@ -18,7 +18,7 @@
   {% set online = (tg.authorized and tg.connected) if me and me.is_admin else (me and me.telegram_chat_id) %}
   <header class="hero">
     <div class="brand-row">
-      <a href="/" class="brand"><img src="/static/icons/icon-192.png" alt="" width="34" height="34">MeuPrecinho</a>
+      <a href="/" class="brand"><img src="/static/icons/icon-192.png" alt="" width="34" height="34">Gerto</a>
       <a class="status {{ 'on' if online else 'off' }}" href="/telegram">
         <span class="dot"></span>{% if me and me.is_admin %}{{ 'Grupos on' if online else 'Grupos off' }}{% else %}{{ 'Avisos on' if online else 'Avisos off' }}{% endif %}</a>
     </div>

@@ -197,7 +197,7 @@ async def alerts_test(request: Request, me: Me):
     if not _can_notify(me):
         flash(request, "Ative as notificações (ou conecte o Telegram) na aba Conta", "err")
         return back("/telegram")
-    ok = await notifier.deliver(me.id, "✅ MeuPrecinho: teste de aviso", title="✅ MeuPrecinho",
+    ok = await notifier.deliver(me.id, "✅ Gerto: teste de aviso", title="✅ Gerto",
                                 body="Teste de aviso: está tudo certo!", url="/alerts", tag="teste")
     if ok:
         flash(request, "Aviso de teste enviado")

@@ -7,7 +7,7 @@
   <form method="post" action="/products">
     <label>Link do produto
       <input name="url" value="{{ prefill }}" placeholder="https://www.loja.com.br/produto..." inputmode="url" autocapitalize="none" required></label>
-    <p class="hint">Dica: no app da loja, toque em <b>Compartilhar → MeuPrecinho</b>.</p>
+    <p class="hint">Dica: no app da loja, toque em <b>Compartilhar → Gerto</b>.</p>
     <label>Preço-alvo (opcional)
       <input name="target" inputmode="decimal" placeholder="R$ 1.999,90"></label>
     <p class="hint">Com alvo, avisa quando ficar abaixo dele. Sem alvo, avisa quando bater o menor preço já visto.</p>
@@ -20,6 +20,6 @@
 {% for item in items %}{% include "_product_card.html" %}{% else %}
 <div class="empty">{{ icon('tag', 40) }}<p>Nenhum produto ainda.</p><small>Cole o link de um produto acima para começar.</small></div>
 {% endfor %}
-<p class="disclosure">Os links de compra do MeuPrecinho são links de afiliado: ao comprar por eles, o app pode
+<p class="disclosure">Os links de compra do Gerto são links de afiliado: ao comprar por eles, o app pode
   receber uma comissão da loja, sem custo extra para você. É isso que mantém o app gratuito.</p>
 {% endblock %}

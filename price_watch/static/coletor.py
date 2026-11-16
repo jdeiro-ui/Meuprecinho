@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Coletor de casa do MeuPrecinho.
+"""Coletor de casa do Gerto.
 
 Roda no Termux (Android) ou em qualquer computador com Python 3 e curl. Pergunta ao
 servidor quais produtos consultar, baixa as páginas pela internet de casa (IP

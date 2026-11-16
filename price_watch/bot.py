@@ -59,7 +59,7 @@ def handle_text(chat_id: str, text: str) -> str | None:
             token = text.partition(" ")[2].strip()
             user = db.scalar(select(User).where(User.tg_link_token == token)) if token else None
             if user is None:
-                return ("Olá! Para receber os avisos, abra o MeuPrecinho, vá em <b>Conta</b> e toque em "
+                return ("Olá! Para receber os avisos, abra o Gerto, vá em <b>Conta</b> e toque em "
                         "<b>Conectar Telegram</b>.")
             for other in db.scalars(select(User).where(User.telegram_chat_id == chat_id, User.id != user.id)):
                 other.telegram_chat_id = None  # uma conversa pertence a uma conta só
@@ -67,7 +67,7 @@ def handle_text(chat_id: str, text: str) -> str | None:
             if user.notify_channel == "app":
                 user.notify_channel = "both"  # conectou o bot: passa a receber também por lá
             db.commit()
-            return (f"✅ Pronto, <b>{user.username}</b>! Seus avisos do MeuPrecinho vão chegar aqui.\n"
+            return (f"✅ Pronto, <b>{user.username}</b>! Seus avisos do Gerto vão chegar aqui.\n"
                     "Para parar, envie /parar.")
         if text.startswith("/parar") or text.startswith("/stop"):
             for user in db.scalars(select(User).where(User.telegram_chat_id == chat_id)):
