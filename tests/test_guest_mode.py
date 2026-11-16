@@ -63,3 +63,8 @@ def test_admin_ve_o_diagnostico_de_acesso(clients):
     adm, hosp = clients
     assert "Seu IP, como o app vê" in adm.get("/telegram").text
     assert "Seu IP, como o app vê" not in hosp.get("/telegram").text
+
+
+def test_robots_pede_para_nao_indexar(clients):
+    adm, _ = clients
+    assert "Disallow: /" in TestClient(main.app).get("/robots.txt").text

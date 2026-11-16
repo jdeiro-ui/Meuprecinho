@@ -166,6 +166,11 @@ def service_worker():
                         headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/robots.txt")
+def robots():
+    return Response("User-agent: *\nDisallow: /\n", media_type="text/plain")
+
+
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "telegram": manager.connected}
