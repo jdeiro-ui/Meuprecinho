@@ -399,6 +399,9 @@ async def telegram_page(request: Request, db: DB, me: Me):
             "invites": db.scalars(select(Invite).order_by(Invite.created_at.desc()).limit(30)).all(),
             "users": {u.id: u.username for u in db.scalars(select(User))},
             "invite_base": f"{base}/convite/",
+            # Verifica o proxy: atrás do Caddy o app deve ver o IP real do visitante (o bloqueio de login é por IP)
+            "access": {"base": base, "ip": request.client.host if request.client else "?",
+                       "proxied": "x-forwarded-for" in request.headers},
         }
     return render(request, "telegram.html", **ctx)
 

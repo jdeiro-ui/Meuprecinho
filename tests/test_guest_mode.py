@@ -57,3 +57,9 @@ def test_convidado_nao_consegue_entrar_no_modo(clients):
     _, hosp = clients
     hosp.post("/modo-convidado/entrar")
     assert "Modo convidado" not in hosp.get("/ofertas").text
+
+
+def test_admin_ve_o_diagnostico_de_acesso(clients):
+    adm, hosp = clients
+    assert "Seu IP, como o app vê" in adm.get("/telegram").text
+    assert "Seu IP, como o app vê" not in hosp.get("/telegram").text

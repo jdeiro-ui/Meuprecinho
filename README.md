@@ -26,6 +26,14 @@ uvicorn price_watch.main:app --host 0.0.0.0 --port 8000
 - `BOT_TOKEN`: crie um bot com @BotFather. `CHAT_ID`: mande uma mensagem ao bot e veja
   `https://api.telegram.org/bot<TOKEN>/getUpdates` (campo `chat.id`).
 
+### Acesso público (Caddy)
+
+`deploy/setup-public.sh` publica o app com HTTPS automático: `sudo bash ~/meuprecinho/deploy/setup-public.sh
+gerto.com.br`. Antes: IP externo fixo e portas 80/443 liberadas no Google Cloud, e o registro A do domínio
+apontando para a VM (o script se recusa a seguir se não apontar). O Caddy escuta só no IP interno da VM e
+não mexe no serviço do app nem no Tailscale. *Conta → Acesso* mostra o endereço e o IP do visitante como
+o app o vê (precisa ser o real, não 127.0.0.1).
+
 ### No Android
 
 O Chrome só oferece "Instalar app" em **HTTPS** (ou `localhost`). Exponha o app por um

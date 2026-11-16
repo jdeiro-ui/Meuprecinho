@@ -50,6 +50,16 @@
 </section>
 
 {% if me.is_admin %}
+<section class="card" id="acesso">
+  <h2>Acesso</h2>
+  <p class="hint">Endereço do app: <b>{{ access.base }}</b><br>Seu IP, como o app vê: <b>{{ access.ip }}</b></p>
+  {% if access.proxied and access.ip in ('127.0.0.1', '::1') %}
+  <p><span class="status inline off"><span class="dot"></span>o app não está lendo o IP real</span></p>
+  <p class="hint">O proxy envia o IP do visitante, mas o app o ignora: todos pareceriam o mesmo e o bloqueio de
+    tentativas de login atingiria todo mundo. Inicie o servidor com <code>--proxy-headers --forwarded-allow-ips=127.0.0.1</code>.</p>
+  {% endif %}
+</section>
+
 <section class="card" id="modo-convidado">
   <h2>Modo convidado</h2>
   <p class="hint">Veja o app como um convidado vê: sem Grupos, Produtos e Lojas, e sem o nome dos canais.
