@@ -199,6 +199,7 @@ class TelegramManager:
             groups = db.scalars(select(TgGroup).where(TgGroup.monitored)).all()
             rules = db.scalars(select(Rule).where(Rule.active)).all()
             self.groups = {g.chat_id: GroupInfo(g.title, g.username) for g in groups}
+            offers.set_sources([g.title for g in groups] + [g.username for g in groups if g.username])
             # Conversa de cada usuário com o bot (para onde vão os avisos)
             users = db.scalars(select(User)).all()
             self.user_chats = {u.id: u.telegram_chat_id for u in users}

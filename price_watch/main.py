@@ -55,6 +55,7 @@ async def lifespan(_: FastAPI):
     offers.merge_duplicates()  # limpa repetidas gravadas por versões anteriores
     item_rules.resync_all()  # regras automáticas dos produtos sempre com o gerador atual
     await manager.start()
+    await asyncio.to_thread(offers.clean_existing)  # esconde a origem também nas ofertas já gravadas
     bot_task = asyncio.create_task(bot.run()) if settings.BOT_TOKEN else None
     scheduler.start()
     yield

@@ -7,6 +7,7 @@ para o administrador."""
 import logging
 import re
 import threading
+import unicodedata
 from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import timedelta
@@ -37,7 +38,7 @@ _ALIASES = {"amzn.to": "Amazon", "amzn.com": "Amazon", "a.co": "Amazon", "meli.l
             "mercadolibre.com": "Mercado Livre", "mercadolivre.com": "Mercado Livre",
             "magalu.com": "Magalu", "magazinevoce.com.br": "Magalu", "shope.ee": "Shopee",
             "shopee.com.br": "Shopee", "aliexpress.com": "AliExpress", "s.click.aliexpress.com": "AliExpress",
-            "link.amazon": "Amazon", "tenis.cc": "Tênis Certo"}
+            "link.amazon": "Amazon", "tenis.cc": "Loja"}  # encurtador de um canal: nunca mostrar o nome dele
 _STORES = {s["domain"]: s["name"] for s in CATALOG} | _ALIASES
 
 _PRICE_TOKEN = re.compile(r"R\$\s*\d[\d.,]*(?:\s*(?:à vista|no pix|no boleto|no cartão))?", re.I)
@@ -50,9 +51,36 @@ _TRAIL = re.compile(r"(?i)\s+(?:por|de|apenas|a partir de|s[óo]|agora|saiu por)
 _TG_REF = re.compile(r"(?i)(?:https?://)?(?:t\.me|telegram\.me)/\S+|@\w{3,}")
 
 
+SOURCES: set[str] = set()  # nomes dos canais monitorados: nunca aparecem para os usuários
+
+
+def set_sources(titles) -> None:
+    SOURCES.clear()
+    SOURCES.update(n for t in titles if len(n := normalize(t or "")) >= 4)
+
+
+def has_source(text: str) -> bool:
+    low = normalize(text)
+    return any(s in low for s in SOURCES)
+
+
+def _plain(text: str) -> str:
+    """Mesmo tamanho do texto, sem acentos (uma letra por letra): permite achar trechos e cortá-los do original."""
+    return "".join(unicodedata.normalize("NFD", c)[0] for c in text)
+
+
 def scrub(text: str) -> str:
-    """Tira de um texto links de canais do Telegram e @menções."""
-    return " ".join(_TG_REF.sub("", text).split())
+    """Tira de um texto links de canais do Telegram, @menções e o nome dos canais monitorados."""
+    text = _TG_REF.sub("", text)
+    spans = []
+    plain = _plain(text)
+    for s in SOURCES:  # maiúsculas, acentos e pontuação diferentes também casam
+        words = [re.escape(w) for w in s.split()]
+        if words:
+            spans += [m.span() for m in re.finditer(r"(?i)" + r"\W+".join(words), plain)]
+    for start, end in sorted(set(spans), reverse=True):
+        text = text[:start] + text[end:]
+    return " ".join(text.split())
 
 
 def _host(url: str) -> str:
@@ -145,6 +173,8 @@ def _lines(text: str) -> list[str]:
         line = re.sub(r"[^\w\u00C0-\u00FF%&+\-.,/()\":! ]+", " ", line)
         line = " ".join(line.split()).strip(" -–:|.,")
         line = _TRAIL.sub("", line).strip(" -–:|.,")
+        if has_source(line):  # tira o nome do canal e o que sobra de "via"/"por"; o resto da linha pode ser útil
+            line = re.sub(r"(?i)^(?:via|por|no|na|em|do|da|de|[\W_])+|(?:via|por|no|na|em|do|da|de|[\W_])+$", "", scrub(line))
         if len(line) < 5 or sum(c.isalpha() for c in line) < 4 or _CHANNEL_PROMO.search(line):
             continue
         if scrubbed := scrub(line):
@@ -312,6 +342,18 @@ def merge_duplicates() -> int:
             removed += 1
         db.commit()
     return removed
+
+
+def clean_existing() -> None:
+    """Aplica as regras de ocultação às ofertas já gravadas (nomes de canais, rótulo de encurtador)."""
+    with SessionLocal() as db:
+        for o in db.scalars(select(Offer).where(Offer.updated_at >= utcnow() - RETENTION)):
+            o.details = "\n".join(s for s in (scrub(ln) for ln in o.details.splitlines()) if len(s) >= 5)
+            o.title = scrub(o.title) or f"Oferta {o.store}"
+            o.search = normalize(o.title)[:200]
+            if o.store == "Tênis Certo":
+                o.store = "Loja"
+        db.commit()
 
 
 # ---------- imagem ----------

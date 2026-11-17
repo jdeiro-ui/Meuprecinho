@@ -174,7 +174,7 @@ def test_diagnostico_conta_os_motivos_de_descarte(clean):
 def test_encurtadores_amazon_e_tenis_certo_sao_reconhecidos(clean):
     a = offers.parse("Echo Pop por R$ 249 https://link.amazon/abc123")
     t = offers.parse("Tênis Olympikus Corre 3 por R$ 189 https://tenis.cc/x9Yz")
-    assert (a.store, t.store) == ("Amazon", "Tênis Certo")
+    assert (a.store, t.store) == ("Amazon", "Loja")
 
 
 def test_encurtador_resolvido_define_a_loja_real_e_junta_duplicatas(clean, monkeypatch):
@@ -286,3 +286,26 @@ def test_busca_vira_regra_de_aviso(clean):
     c.post("/ofertas/regra", data={"q": "kindle 16gb"})                    # repetir não duplica
     with SessionLocal() as db:
         assert db.query(Rule).join(User).filter(User.username == "busc_of").count() == 1
+
+
+def test_nome_do_canal_some_do_titulo_dos_detalhes_e_do_aviso(clean, monkeypatch):
+    monkeypatch.setattr(offers, "SOURCES", set())
+    offers.set_sources(["Tênis Certo Cupons & Promos", "Radar dos Tênis"])
+    msg = ("🔥 Tênis Adidas Superstar Branco\nOferta exclusiva Tênis Certo Cupons & Promos\n"
+           "Via Radar dos Tênis: tamanhos 38 ao 44\nR$ 163\nhttps://amzn.to/xyz")
+    p = offers.parse(msg)
+    assert "Certo" not in p.details and "Radar" not in p.details and "tamanhos 38 ao 44" in p.details
+    assert offers.scrub("Veja no TÊNIS CERTO cupons & promos agora") == "Veja no agora"
+
+
+def test_limpeza_das_ofertas_ja_gravadas(clean, monkeypatch):
+    monkeypatch.setattr(offers, "SOURCES", set())
+    offers.set_sources(["Canal Secreto"])
+    with SessionLocal() as db:
+        db.add(Offer(key="u:x", title="Tênis Nike Air Max Canal Secreto", search="x", store="Tênis Certo",
+                     url="https://a.b/c", details="Frete grátis\nVia Canal Secreto"))  # a 2ª linha vira só "Via" e some
+        db.commit()
+    offers.clean_existing()
+    with SessionLocal() as db:
+        o = db.query(Offer).one()
+        assert o.store == "Loja" and "Secreto" not in o.title and o.details == "Frete grátis"
