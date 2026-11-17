@@ -13,6 +13,22 @@
   {% for s in stores %}<a class="chip {{ 'hot' if s == loja }}" href="/ofertas?loja={{ s|urlencode }}{{ '&q=' ~ (q|urlencode) if q }}">{{ s }}</a>{% endfor %}
 </div>
 {% endif %}
+{% if keyword %}
+<section class="card search-rule">
+  {% if has_rule %}
+  <p><span class="status inline on"><span class="dot"></span>você já recebe avisos para “{{ q|trim }}”</span></p>
+  <a class="btn ghost small" href="/rules">Ver minhas regras</a>
+  {% else %}
+  <form method="post" action="/ofertas/regra">
+    <strong>{{ icon('bell', 18) }} Avisar quando aparecer “{{ q|trim }}”</strong>
+    <p class="hint">{{ 'Nenhuma oferta agora. ' if not offers }}Você recebe um aviso assim que surgir uma promoção desse produto.</p>
+    <input type="hidden" name="q" value="{{ q|trim }}">
+    <label>Só até R$ (opcional) <input name="max_price" inputmode="decimal" placeholder="R$ 300,00"></label>
+    <button class="btn primary block">Criar aviso</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
 {% if diag %}
 <details class="card diag">
   <summary class="link-like">Diagnóstico (só você vê): {{ diag.total }} mensagens lidas nas últimas 24 h</summary>

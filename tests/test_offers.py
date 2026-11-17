@@ -264,3 +264,25 @@ def test_merge_junta_repetidas_ja_gravadas_e_soma_cliques(clean):
     with SessionLocal() as db:
         (o,) = db.query(Offer).all()
         assert (o.price_cents, o.old_price_cents, o.clicks) == (18000, 20000, 3)
+
+
+def test_busca_vira_regra_de_aviso(clean):
+    init_db()
+    with SessionLocal() as db:
+        if not db.query(User).filter_by(username="busc_of").first():
+            db.add(User(username="busc_of", password_hash=hash_password("senha-busc1")))
+        db.commit()
+    main._fails.clear()
+    c = TestClient(main.app)
+    c.post("/login", data={"username": "busc_of", "password": "senha-busc1"})
+    page = c.get("/ofertas?q=kindle 16gb").text
+    assert "Nenhuma oferta agora" in page and "Criar aviso" in page
+    assert "Criar aviso" not in c.get("/ofertas").text                   # sem busca, sem o cartão
+    c.post("/ofertas/regra", data={"q": "kindle 16gb", "max_price": "R$ 450,00"})
+    with SessionLocal() as db:
+        r = db.query(Rule).join(User).filter(User.username == "busc_of", Rule.keyword == "kindle + 16gb").one()
+        assert r.max_price_cents == 45000
+    assert "já recebe avisos" in c.get("/ofertas?q=kindle 16gb").text
+    c.post("/ofertas/regra", data={"q": "kindle 16gb"})                    # repetir não duplica
+    with SessionLocal() as db:
+        assert db.query(Rule).join(User).filter(User.username == "busc_of").count() == 1

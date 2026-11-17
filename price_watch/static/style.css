@@ -382,3 +382,5 @@ form.actions .btn + .btn { margin-left: 6px; }
   box-shadow: 0 6px 18px rgba(15, 30, 90, .12);
 }
 .offer-details { margin: 4px 0 2px; color: var(--muted); font-size: .88rem; white-space: pre-line; overflow-wrap: anywhere; }
+.search-rule form { display: grid; gap: 8px; }
+.search-rule .btn { margin-top: 4px; }
