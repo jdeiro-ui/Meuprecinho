@@ -309,3 +309,24 @@ def test_limpeza_das_ofertas_ja_gravadas(clean, monkeypatch):
     with SessionLocal() as db:
         o = db.query(Offer).one()
         assert o.store == "Loja" and "Secreto" not in o.title and o.details == "Frete grátis"
+
+
+def test_titulo_ignora_frase_de_efeito_e_detalhes_ignoram_aviso_e_cupom_reserva():
+    p = offers.parse("""👟 Sapatênis casual super confortável com preço imperdível!
+Tênis Unissex Sapatênis Casual Crshoes
+💰 R$ 69
+🎟️ Cupom: BOASOFERTAS
+Nao funcionou Tente: PROMOPRAMODA
+Os preços podem mudar a qualquer momento!
+https://meli.la/xyz""")
+    assert p.title == "Tênis Unissex Sapatênis Casual Crshoes"
+    assert p.coupon == "BOASOFERTAS" and p.details == ""
+
+
+def test_titulo_do_produto_e_detalhes_sem_chamada_nem_opcao_de_compra():
+    p = offers.parse("""Biscoito Para Cachorros Pedigree Marrobone Carne Adultos 500g
+BOLACHAS PRO SEU DOGUINHO
+Selecione a opção de compra: Programe e Poupe (pode cancelar quando quiser)
+R$ 13
+https://amzn.to/pedigree""")
+    assert p.title.startswith("Biscoito Para Cachorros Pedigree") and p.details == ""

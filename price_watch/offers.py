@@ -182,25 +182,51 @@ def _lines(text: str) -> list[str]:
     return out
 
 
+_PRODUCT_WORDS = {"tenis", "sapatenis", "camiseta", "camisa", "calca", "bermuda", "jaqueta", "bota", "sandalia", "chinelo",
+                  "mochila", "bolsa", "relogio", "fone", "notebook", "smartphone", "celular", "tv", "monitor", "teclado",
+                  "mouse", "cadeira", "geladeira", "fogao", "fritadeira", "airfryer", "panela", "liquidificador",
+                  "aspirador", "ventilador", "biscoito", "racao", "perfume", "creme", "shampoo", "cafe", "whey",
+                  "creatina", "suplemento", "bicicleta", "capacete", "colchao", "travesseiro", "tablet", "console",
+                  "headset", "caixa", "impressora", "roteador", "camera", "bateria", "carregador", "cabo", "pneu"}
+_MARKETING = {"super", "imperdivel", "incrivel", "melhor", "barato", "baratinho", "preco", "precinho", "promocao",
+              "oferta", "ofertao", "desconto", "aproveite", "corre", "confortavel", "maravilhoso", "perfeito",
+              "exclusivo", "ultimas", "unidades", "lindo", "show", "demais", "top", "bom", "boa"}
+# frases de rodapé/aviso e cupons de reserva: não descrevem o produto
+_FLUFF = re.compile(r"(?i)(pre[cç]os? (?:podem|pode)|pode variar|sujeito|enquanto durar|estoque|v[aá]lido at[eé]|"
+                    r"n[aã]o funcion|\btente\b|caso (?:n[aã]o|o cupom)|se n[aã]o funcion|selecione|op[cç][aã]o de compra|"
+                    r"programe e poupe|cancelar quando|assinatura|a qualquer momento|corra|aproveite|"
+                    r"cupom (?:alternativo|reserva)|frete gr[aá]tis (?:acima|para)|clique)")
+
+
+def _is_slogan(line: str) -> bool:
+    """TUDO EM MAIÚSCULAS, curto e sem número: chamada de efeito, não detalhe do produto."""
+    return line.isupper() and len(line.split()) <= 6 and not re.search(r"\d", line)
+
+
 def _score(line: str) -> int:
     words = normalize(line).split()
-    s = 3 * any(w in _BRANDS for w in words) + bool(re.search(r"\d", line)) + (12 <= len(line) <= 90)
+    caps = sum(w[:1].isupper() for w in line.split())
+    s = 3 * any(w in _BRANDS for w in words) + 2 * any(w in _PRODUCT_WORDS for w in words)
+    s += bool(re.search(r"\d", line)) + (12 <= len(line) <= 90) + (caps >= 3)
+    s -= min(3 * sum(w in _MARKETING for w in words), 6) + 2 * line.endswith("!") + (len(words) > 14)
     if _GENERIC.match(line) and len(words) <= 4:
         s -= 4
     return s
 
 
 def _name_and_details(text: str) -> tuple[str | None, str]:
-    """Título = a linha que mais parece o produto (marca, modelo, medidas); o resto vira detalhes."""
+    """Título = a linha que mais parece o produto (marca, tipo, modelo, medidas); o resto vira detalhes úteis."""
     lines = [ln for ln in _lines(text) if len(ln) >= 10 and sum(c.isalpha() for c in ln) >= 8]
     if not lines:
         return None, ""
     best = max(range(len(lines)), key=lambda i: (_score(lines[i]), -i))
     title = lines[best][:100]
-    rest = [ln[:120] for i, ln in enumerate(lines) if i != best and not (_GENERIC.match(ln) and len(ln.split()) <= 4)]
+    rest = [ln[:120] for i, ln in enumerate(lines)
+            if i != best and not (_GENERIC.match(ln) and len(ln.split()) <= 4)
+            and not _FLUFF.search(ln) and not _is_slogan(ln) and _score(ln) > -2]
     details, used = [], 0
-    for ln in rest[:4]:
-        if used + len(ln) > 240:
+    for ln in rest[:3]:
+        if used + len(ln) > 200:
             break
         details.append(ln)
         used += len(ln)
